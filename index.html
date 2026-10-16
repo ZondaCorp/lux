@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b3b6f">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Puntos de medición - Método de la grilla</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #f1f5f9; color: #0f172a; padding: 16px; min-height: 100vh;
+  }
+  .wrap { max-width: 520px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 16px; }
+  header h1 { font-size: 1.25rem; color: #0b3b6f; }
+  header p { font-size: .85rem; color: #475569; margin-top: 4px; }
+  .card {
+    background: #fff; border-radius: 14px; padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 14px;
+  }
+  .card h2 { font-size: 1rem; margin-bottom: 10px; color: #0b3b6f; }
+  .field { margin-bottom: 12px; }
+  label { display: block; font-size: .9rem; font-weight: 600; margin-bottom: 4px; }
+  label small { font-weight: 400; color: #64748b; }
+  .input-row { display: flex; align-items: center; gap: 8px; }
+  input[type=number], .input-row input[type=text] {
+    flex: 1; font-size: 1.1rem; padding: 12px; border: 1px solid #cbd5e1;
+    border-radius: 10px; background: #fff; -webkit-appearance: none; appearance: none;
+  }
+  input[type=number]:focus, .input-row input[type=text]:focus { outline: 2px solid #2563eb; border-color: transparent; }
+  .unit { font-weight: 600; color: #475569; min-width: 28px; }
+  .formula {
+    font-family: monospace; font-size: .8rem; background: #f8fafc; padding: 8px;
+    border-radius: 8px; color: #334155; margin-top: 8px; line-height: 1.5;
+  }
+  button {
+    width: 100%; padding: 14px; font-size: 1.05rem; font-weight: 700; color: #fff;
+    background: #2563eb; border: none; border-radius: 12px; cursor: pointer;
+  }
+  button:active { transform: scale(.98); }
+  .error { color: #b91c1c; font-size: .9rem; margin-top: 10px; display: none; }
+  .grid-results {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px;
+  }
+  .stat { background: #eff6ff; border-radius: 10px; padding: 10px; text-align: center; }
+  .stat .val { font-size: 1.4rem; font-weight: 800; color: #1d4ed8; }
+  .stat .lbl { font-size: .75rem; color: #475569; }
+  .stat.big { grid-column: span 2; background: #dcfce7; }
+  .stat.big .val { color: #15803d; font-size: 1.8rem; }
+  canvas { width: 100%; height: auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
+  .legend { font-size: .8rem; color: #475569; margin-top: 6px; text-align: center; }
+  .detail { font-size: .85rem; color: #334155; line-height: 1.7; margin-top: 10px; }
+  .table-wrap { max-height: 240px; overflow: auto; margin-top: 10px; border: 1px solid #e2e8f0; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  th, td { padding: 6px; text-align: center; border-bottom: 1px solid #f1f5f9; }
+  th { background: #f8fafc; position: sticky; top: 0; }
+  .hidden { display: none; }
+  footer { text-align: center; font-size: .75rem; color: #64748b; margin-top: 8px; }
+  input[type=text], input[type=date], input[type=time], textarea { width: 100%; font: inherit; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+  textarea { min-height: 70px; resize: vertical; }
+  select { width: 100%; font: inherit; font-size: 1.05rem; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .actions button { font-size: .92rem; padding: 12px 8px; }
+  #btnPdf { background: #0f766e; }
+  #btnNew { background: #475569; }
+  .lux-input { width: 100%; min-width: 70px; min-height: 40px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 16px; background: #fff; color: #0f172a; touch-action: manipulation; }
+  .lux-input:focus { outline: 2px solid #2563eb; border-color: transparent; }
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .summary-line { background: #f8fafc; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: .88rem; line-height: 1.6; }
+  .report-only { display: none; }
+  .lux-input.bad { border-color: #b91c1c; background: #fef2f2; }
+  #btnCsv { background: #0f766e; }
+  #btnClr { background: #b91c1c; }
+  #obsPrint { white-space: pre-wrap; font-size: 9pt; }
+  @page { size: A4 portrait; margin: 12mm; }
+  @media print {
+    body { background: #fff; color: #111827; padding: 0; font-size: 10pt; }
+    .wrap { max-width: none; width: 100%; }
+    header { margin-bottom: 8mm; }
+    header h1 { font-size: 16pt; }
+    header p { font-size: 9pt; }
+    .card { box-shadow: none; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; margin-bottom: 8px; break-inside: avoid; }
+    .card h2 { font-size: 11pt; margin-bottom: 6px; }
+    .no-print, button, .error { display: none !important; }
+    .report-only { display: block; }
+    input[type=text], input[type=date], input[type=time], input[type=number], textarea { border: none; border-bottom: 1px solid #9ca3af; border-radius: 0; padding: 2px 0; background: transparent; font-size: 9pt; }
+    .field { margin-bottom: 6px; }
+    #observaciones { display: none; }
+    .input-row { gap: 4px; }
+    .formula { font-size: 8pt; }
+    .grid-results { gap: 5px; }
+    .stat { padding: 6px; }
+    .stat .val { font-size: 12pt; }
+    .stat.big .val { font-size: 14pt; }
+    canvas { max-height: 105mm; width: auto; max-width: 100%; display: block; margin: auto; }
+    .table-wrap { max-height: none; overflow: visible; }
+    table { font-size: 8pt; }
+    th, td { padding: 3px 5px; border: 1px solid #d1d5db; }
+    th { position: static; background: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .lux-input { border: none; padding: 0; min-width: 0; width: 100%; background: transparent; }
+    .summary-line { border: 1px solid #d1d5db; }
+    .card#gridCard { break-inside: auto; }
+    tr { break-inside: avoid; }
+    footer { margin-top: 6mm; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ZONDA CORP SRL</h1>
+    <p>Puntos de medición de iluminación - Grilla</p>
+  </header>
+
+  <div class="card no-print" id="modoCard">
+    <h2>Modo de grilla</h2>
+    <div class="field"><select id="modo" aria-label="Modo de grilla">
+      <option value="norma">Normativo: calcula N según el índice K</option>
+      <option value="custom">Personalizado: yo defino columnas y filas (espacios abiertos)</option>
+    </select></div>
+    <p class="legend" id="modoAyuda" style="margin:0">Normativo: la app calcula el mínimo de puntos a partir de L, A y Hm. Personalizado: ingresás largo, ancho y cuántas columnas y filas querés; K y N no se calculan.</p>
+  </div>
+
+  <div class="card" id="identCard">
+    <h2>Identificación del relevamiento</h2>
+    <div class="field"><label for="empresa">Empresa</label><input type="text" id="empresa"  placeholder="Empresa / cliente"></div>
+    <div class="field"><label for="establecimiento">Establecimiento / ubicación</label><input type="text" id="establecimiento" placeholder="Ej.: Planta, edificio, dirección"></div>
+    <div class="field"><label for="sector">Sector / punto de muestreo</label><input type="text" id="sector" placeholder="Ej.: Depósito, puesto 1"></div>
+    <div class="field"><label for="origen">Origen / orientación del croquis</label><input type="text" id="origen" placeholder="Ej.: A1 junto a la puerta de ingreso"></div>
+    <div class="field"><label for="fecha">Fecha de relevamiento</label><input type="date" id="fecha"></div>
+    <div class="field"><label for="horaInicio">Hora de inicio</label><input type="time" id="horaInicio"></div>
+    <div class="field"><label for="horaFin">Hora de fin</label><input type="text" id="horaFin" readonly aria-readonly="true" placeholder="Se registra al exportar el PDF"></div>
+    <p class="legend no-print">La hora de inicio se registra al abrir o iniciar una ficha nueva. La hora de fin se registra al exportar el PDF.</p>
+  </div>
+
+  <div class="card" id="geometryCard">
+    <h2>1. Datos del recinto</h2>
+    <div class="field">
+      <label for="L">Largo del recinto (L) <small>- m</small></label>
+      <div class="input-row"><input type="text" id="L" inputmode="decimal" autocomplete="off" placeholder="Ej: 10"><span class="unit">m</span></div>
+    </div>
+    <div class="field">
+      <label for="A">Ancho del recinto (A) <small>- m</small></label>
+      <div class="input-row"><input type="text" id="A" inputmode="decimal" autocomplete="off" placeholder="Ej: 6"><span class="unit">m</span></div>
+    </div>
+    <div class="field" data-norma>
+      <label for="H">Altura de montaje (Hm) <small>- centro de la luminaria al plano de trabajo</small></label>
+      <div class="input-row"><input type="text" id="H" inputmode="decimal" autocomplete="off" placeholder="Ej: 2.8"><span class="unit">m</span></div>
+    </div>
+    <div class="field" data-custom style="display:none">
+      <label for="nCols">Columnas <small>- divisiones a lo largo del largo (L)</small></label>
+      <div class="input-row"><input type="text" id="nCols" inputmode="numeric" autocomplete="off" placeholder="Ej: 5"><span class="unit">col.</span></div>
+    </div>
+    <div class="field" data-custom style="display:none">
+      <label for="nFilas">Filas <small>- divisiones a lo ancho (A)</small></label>
+      <div class="input-row"><input type="text" id="nFilas" inputmode="numeric" autocomplete="off" placeholder="Ej: 4"><span class="unit">filas</span></div>
+    </div>
+    <button id="btnCalc" class="no-print">Calcular puntos de medición</button>
+    <div class="error" id="err">Ingresa valores mayores que cero en los tres campos.</div>
+    <div class="error" id="stale">Cambiaste las dimensiones: volvé a calcular para actualizar la grilla.</div>
+  </div>
+
+  <div class="card" id="formCard" data-norma>
+    <h2>Fórmulas aplicadas</h2>
+    <div class="formula">
+K = (L × A) / (Hm × (L + A))<br>
+x = índice K redondeado al entero superior<br>
+  (si K ≥ 3 → x = 4)<br>
+N = (x + 2)²
+    </div>
+  </div>
+
+  <div class="card hidden" id="resultCard">
+    <h2>2. Resultados</h2>
+    <div class="grid-results">
+      <div class="stat" data-norma><div class="val" id="rK">-</div><div class="lbl">Índice de local K</div></div>
+      <div class="stat" data-norma><div class="val" id="rX">-</div><div class="lbl">x (redondeado)</div></div>
+      <div class="stat big" data-norma><div class="val" id="rN">-</div><div class="lbl">Número mínimo de puntos N</div></div>
+      <div class="stat"><div class="val" id="rGrid">-</div><div class="lbl">Grilla (columnas × filas)</div></div>
+      <div class="stat"><div class="val" id="rTotal">-</div><div class="lbl">Puntos finales</div></div>
+    </div>
+    <div class="detail" id="detail"></div>
+  </div>
+
+  <div class="card hidden" id="gridCard">
+    <h2>3. Grilla de medición</h2>
+    <canvas id="cv" width="600" height="600"></canvas>
+    <div class="legend">● Punto (azul = mínimo, verde = máximo) · Columnas con letras y filas con números (ej.: A1) · Origen X=0, Y=0: esquina superior izquierda del esquema</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Punto</th><th>Fila</th><th>Columna</th><th>X (m)</th><th>Y (m)</th><th>Iluminancia (lux)</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="summary-line" id="luxSummary">Ingrese las lecturas de iluminancia en lux en la tabla. El promedio se calculará con los valores cargados.</div>
+  </div>
+
+  <div class="card" id="obsCard">
+    <h2>4. Observaciones del relevamiento</h2>
+    <textarea id="observaciones" placeholder="Obstáculos, condiciones particulares, desvíos de la grilla u otras observaciones..."></textarea>
+    <div id="obsPrint" class="report-only"></div>
+  </div>
+
+
+
+  <div class="actions no-print">
+    <button id="btnPdf">Exportar ficha PDF</button>
+    <button id="btnNew">Nueva ficha / sector</button>
+  </div>
+  <div class="card no-print" id="regCard">
+    <h2>5. Sectores registrados en este equipo</h2>
+    <div class="summary-line" id="regInfo"></div>
+    <div class="actions" style="margin-top:10px;margin-bottom:0"><button id="btnCsv">Descargar CSV</button><button id="btnClr">Borrar registro</button></div>
+  </div>
+  <footer>Registro de cálculo y medición de iluminancia · Las lecturas deben efectuarse en el centro de cada área.</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function numeroColumna(n) {
+  // Convierte 1, 2, ... en A, B, ... Z, AA, AB...
+  let salida = '';
+  while (n > 0) {
+    const resto = (n - 1) % 26;
+    salida = String.fromCharCode(65 + resto) + salida;
+    n = Math.floor((n - 1) / 26);
+  }
+  return salida;
+}
+
+let estado = null;
+const IDS = ['empresa','establecimiento','sector','origen','fecha','horaInicio','horaFin','modo','L','A','H','nCols','nFilas','observaciones'];
+const KEY = 'lux_v6_ficha', KREG = 'lux_v6_reg';
+const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function snapActual() {
+  const m = $('modo').value;
+  return [num('L'), num('A'), m === 'norma' ? num('H') : '', m,
+          m === 'custom' ? parseInt($('nCols').value, 10) : '', m === 'custom' ? parseInt($('nFilas').value, 10) : ''].join('|');
+}
+function aplicarModo() {
+  const c = $('modo').value === 'custom';
+  document.querySelectorAll('[data-norma]').forEach(e => e.style.display = c ? 'none' : '');
+  document.querySelectorAll('[data-custom]').forEach(e => e.style.display = c ? '' : 'none');
+}
+function num(id) { return parseFloat($(id).value.trim().replace(',', '.')); }
+
+// Elige nL x nA con nL*nA >= N y celdas lo más cuadradas posible
+function elegirGrilla(L, A, N) {
+  let best = null;
+  for (let nL = 1; nL <= 40; nL++) for (let nA = 1; nA <= 40; nA++) {
+    const t = nL * nA; if (t < N) continue;
+    const sc = Math.abs(Math.log((L / nL) / (A / nA))) + 0.5 * (t - N) / N;
+    if (!best || sc < best.sc) best = { nL, nA, sc };
+  }
+  return best;
+}
+
+function leerLux(el) {
+  const t = el.value.trim();
+  if (t === '') return { t: 'vacio' };
+  if (/^(n\/?a|x)$/i.test(t)) return { t: 'na' };
+  if (/^\d{1,3}[.,]\d{3}$/.test(t) || !/^\d+([.,]\d+)?$/.test(t)) return { t: 'mal' };
+  return { t: 'ok', v: parseFloat(t.replace(',', '.')) };
+}
+
+function redibujar() {
+  if (estado && !$('gridCard').classList.contains('hidden'))
+    dibujar(estado.L, estado.A, estado.nL, estado.nA, estado.cw, estado.ch, estado.pts);
+}
+
+function verificarVigencia() {
+  if (!estado) return;
+  const vigente = estado.snap === snapActual();
+  $('resultCard').classList.toggle('hidden', !vigente);
+  $('gridCard').classList.toggle('hidden', !vigente);
+  $('stale').style.display = vigente ? 'none' : 'block';
+  if (vigente) redibujar();
+}
+
+function guardar() {
+  try {
+    const d = { campos: {}, lect: {}, cd: null };
+    IDS.forEach(id => d.campos[id] = $(id).value);
+    document.querySelectorAll('.lux-input').forEach(el => d.lect[el.dataset.point] = el.value);
+    if (estado) { const q = estado.snap.split('|'); d.cd = { L: q[0], A: q[1], H: q[2], modo: q[3], nCols: q[4], nFilas: q[5] }; }
+    localStorage.setItem(KEY, JSON.stringify(d));
+  } catch (e) {}
+}
+
+function restaurar() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (!d) return;
+    IDS.forEach(id => { if (d.campos[id] !== undefined) $(id).value = d.campos[id]; });
+    $('obsPrint').textContent = $('observaciones').value;
+    if (d.cd) {
+      $('modo').value = d.cd.modo || 'norma'; $('nCols').value = d.cd.nCols || ''; $('nFilas').value = d.cd.nFilas || '';
+      $('L').value = d.cd.L; $('A').value = d.cd.A; $('H').value = d.cd.H || '';
+      calcular();
+      document.querySelectorAll('.lux-input').forEach(el => { el.value = d.lect[el.dataset.point] || ''; });
+      ['L','A','H','nCols','nFilas','modo'].forEach(id => { if (d.campos[id] !== undefined) $(id).value = d.campos[id]; });
+      aplicarModo();
+      actualizarResumenLux();
+      verificarVigencia();
+    }
+  } catch (e) {}
+}
+
+function leerReg() { try { return JSON.parse(localStorage.getItem(KREG) || '[]'); } catch (e) { return []; } }
+
+function registrar() {
+  if (!estado) return;
+  const els = [...document.querySelectorAll('.lux-input')];
+  const rs = els.map(leerLux);
+  const vals = rs.filter(r => r.t === 'ok').map(r => r.v);
+  if (!vals.length) return;
+  const et = [...document.querySelectorAll('#tbody tr b')].map(b => b.textContent);
+  const prom = vals.reduce((a, b) => a + b, 0) / vals.length, mn = Math.min(...vals), mx = Math.max(...vals);
+  const f = {};
+  IDS.forEach(id => f[id] = $(id).value);
+  Object.assign(f, {
+    L: estado.L, A: estado.A, H: estado.H, modo: estado.modo === 'custom' ? 'Personalizada' : 'Normativo',
+    K: estado.modo === 'custom' ? '' : $('rK').textContent, N: estado.modo === 'custom' ? '' : $('rN').textContent.replace(' puntos', ''), grilla: $('rGrid').textContent,
+    puntos: els.length, cargadas: vals.length, prom, mn, mx, unif: prom > 0 ? mn / prom : null,
+    lect: els.map((el, i) => et[i] + '=' + el.value.trim()).join(' ')
+  });
+  try {
+    const reg = leerReg();
+    const key = r => [r.establecimiento, r.sector, r.fecha].join('|');
+    const i = reg.findIndex(r => key(r) === key(f));
+    if (i >= 0) reg[i] = f; else reg.push(f);
+    localStorage.setItem(KREG, JSON.stringify(reg));
+  } catch (e) {}
+  actualizarRegistro();
+}
+
+function actualizarRegistro() {
+  const reg = leerReg();
+  $('regInfo').innerHTML = reg.length
+    ? `<b>${reg.length}</b> sector(es) guardado(s): ${reg.map(r => esc(r.sector || 'sin nombre')).join(', ')}. Se guardan al exportar el PDF o al iniciar un sector nuevo.`
+    : 'Ninguno todavía. Cada sector se guarda al exportar el PDF o al iniciar un sector nuevo.';
+}
+
+function descargarCSV() {
+  registrar();
+  const reg = leerReg();
+  if (!reg.length) { alert('No hay sectores guardados todavía.'); return; }
+  const cols = [['Empresa','empresa'],['Establecimiento','establecimiento'],['Sector','sector'],['Origen/orientación','origen'],['Fecha','fecha'],['Hora inicio','horaInicio'],['Hora fin','horaFin'],['L (m)','L'],['A (m)','A'],['Hm (m)','H'],['K','K'],['N mínimo','N'],['Grilla (col×filas)','grilla'],['Modo de grilla','modo'],['Puntos','puntos'],['Cargadas','cargadas'],['Emed (lux)','prom'],['Emín (lux)','mn'],['Emáx (lux)','mx'],['Emín/Emed','unif'],['Observaciones','observaciones'],['Lecturas','lect']];
+  const q = v => {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'number') v = (Number.isInteger(v) ? String(v) : v.toFixed(2)).replace('.', ',');
+    return '"' + String(v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
+  };
+  const csv = '\uFEFF' + [cols.map(c => q(c[0])).join(';')].concat(reg.map(r => cols.map(c => q(r[c[1]])).join(';'))).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'Relevamiento_iluminacion_' + fechaLocalISO() + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function borrarRegistro() {
+  if (!confirm('¿Borrar el registro de todos los sectores guardados en este equipo? Descargá el CSV antes si lo necesitás.')) return;
+  try { localStorage.removeItem(KREG); } catch (e) {}
+  actualizarRegistro();
+}
+
+function calcular() {
+  const lecturasPrevias = {};
+  document.querySelectorAll('.lux-input').forEach(el => { lecturasPrevias[el.dataset.point] = el.value; });
+  const L = num('L');
+  const A = num('A');
+  const modo = $('modo').value;
+  const H = modo === 'norma' ? num('H') : NaN;
+  let nL, nA, K, x, N, ok;
+  if (modo === 'custom') {
+    const sc = $('nCols').value.trim(), sf = $('nFilas').value.trim();
+    nL = parseInt(sc, 10); nA = parseInt(sf, 10);
+    ok = L > 0 && A > 0 && /^\d+$/.test(sc) && /^\d+$/.test(sf) && nL >= 1 && nA >= 1 && nL <= 50 && nA <= 50;
+    $('err').textContent = 'Ingresá largo y ancho mayores que cero, y columnas y filas como enteros entre 1 y 50.';
+  } else {
+    ok = L > 0 && A > 0 && H > 0;
+    $('err').textContent = 'Ingresa valores mayores que cero en los tres campos.';
+  }
+  $('err').style.display = ok ? 'none' : 'block';
+  if (!ok) return;
+
+  if (modo === 'norma') {
+    K = Math.round(((L * A) / (H * (L + A))) * 1e9) / 1e9;   // evita 1.0000000000000002
+    x = K >= 3 ? 4 : Math.max(1, Math.ceil(K));
+    N = (x + 2) ** 2;
+    const g = elegirGrilla(L, A, N);          // nL*nA >= N, áreas casi cuadradas
+    nL = g.nL; nA = g.nA;
+  }
+  const hayLect = Object.values(lecturasPrevias).some(v => v.trim() !== '');
+  const cambia = estado && (estado.nL !== nL || estado.nA !== nA);
+  if (hayLect && cambia && !confirm('La grilla cambió de ' + estado.nL + '×' + estado.nA + ' a ' + nL + '×' + nA + '. Las lecturas cargadas ya no corresponden a los mismos puntos y se borrarán. ¿Continuar?')) return;
+  const prev = cambia ? {} : lecturasPrevias;
+  const total = nL * nA;
+  const cw = L / nL, ch = A / nA;             // dimensiones reales de cada área
+
+  // Resultados
+  if (modo === 'norma') {
+    $('rK').textContent = K.toFixed(2);
+    $('rX').textContent = x;
+    $('rN').textContent = N + ' puntos';
+  }
+  $('rGrid').textContent = nL + ' × ' + nA;
+  $('rTotal').textContent = total;
+  $('detail').innerHTML =
+    `Área de cada sector: <b>${cw.toFixed(2)} m × ${ch.toFixed(2)} m</b><br>` +
+    `Superficie total: <b>${(L * A).toFixed(2)} m²</b><br>` +
+    (modo === 'custom' ? `<i>Grilla definida por el usuario (${nL} columnas × ${nA} filas); no se aplica el cálculo de K ni N.</i>`
+      : total !== N ? `<i>La grilla final tiene ${total} puntos (ajustada para cubrir todo el recinto con áreas casi cuadradas).</i>` : `La grilla coincide exactamente con N.`);
+
+  $('resultCard').classList.remove('hidden');
+  $('gridCard').classList.remove('hidden');
+
+  // Puntos (centros de cada área)
+  const pts = [];
+  for (let i = 0; i < nL; i++) {
+    for (let j = 0; j < nA; j++) {
+      pts.push({ fila: j + 1, col: numeroColumna(i + 1), etiqueta: numeroColumna(i + 1) + (j + 1), x: (i + 0.5) * cw, y: (j + 0.5) * ch });
+    }
+  }
+
+  // Tabla
+  $('tbody').innerHTML = pts.map((p, k) =>
+    `<tr><td><b>${p.etiqueta}</b></td><td>${p.fila}</td><td>${p.col}</td><td>${p.x.toFixed(2)}</td><td>${p.y.toFixed(2)}</td><td><input class="lux-input" type="text" inputmode="decimal" autocomplete="off" data-point="${k + 1}" aria-label="Iluminancia punto ${k + 1}" placeholder="lux" enterkeyhint="next"></td></tr>`
+  ).join('');
+  document.querySelectorAll('.lux-input').forEach(el => { el.value = prev[el.dataset.point] || ''; });
+  actualizarResumenLux();
+  estado = { L, A, nL, nA, cw, ch, pts, modo, H: modo === 'norma' ? H : '', snap: snapActual() };
+  verificarVigencia();
+  redibujar();
+}
+
+function dibujar(L, A, nL, nA, cw, ch, pts) {
+  const cv = $('cv');
+  const ctx = cv.getContext('2d');
+  const W = cv.clientWidth || 500;
+  const pad = 30;
+  const scale = Math.min((W - 2 * pad) / L, (W - 2 * pad) / A * 1); // mantiene proporción
+  const sc = Math.min((W - 2 * pad) / L, (W - 2 * pad) / A);
+  const rw = L * sc, rh = A * sc;
+  const ox = (W - rw) / 2, oy = (W - rh) / 2;
+  const H = Math.max(rh + 2 * oy, 200);
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  // Recinto
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(ox, oy, rw, rh);
+  // Grilla
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  for (let i = 1; i < nL; i++) {
+    const x = ox + i * cw * sc;
+    ctx.beginPath(); ctx.moveTo(x, oy); ctx.lineTo(x, oy + rh); ctx.stroke();
+  }
+  for (let j = 1; j < nA; j++) {
+    const y = oy + j * ch * sc;
+    ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + rw, y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // Borde
+  ctx.strokeStyle = '#0b3b6f';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ox, oy, rw, rh);
+  // Identificación de columnas (letras) y filas (números)
+  ctx.fillStyle = '#0b3b6f';
+  ctx.font = 'bold 13px Arial';
+  ctx.textAlign = 'center';
+  for (let i = 0; i < nL; i++) {
+    const cx = ox + (i + 0.5) * cw * sc;
+    ctx.fillText(numeroColumna(i + 1), cx, Math.max(14, oy - 9));
+  }
+  ctx.textAlign = 'right';
+  for (let j = 0; j < nA; j++) {
+    const cy = oy + (j + 0.5) * ch * sc + 4;
+    ctx.fillText(String(j + 1), Math.max(12, ox - 9), cy);
+  }
+  // Puntos de medición (con lectura; mínimo en azul, máximo en verde)
+  const lect = pts.map((p, k) => { const e = document.querySelector('.lux-input[data-point="' + (k + 1) + '"]'); const q = e ? leerLux(e) : { t: 'vacio' }; return q.t === 'ok' ? q.v : null; });
+  const vv = lect.filter(v => v !== null), vmin = Math.min(...vv), vmax = Math.max(...vv);
+  const r = Math.max(3, Math.min(7, sc * 0.12));
+  ctx.font = '11px Arial'; ctx.textAlign = 'center';
+  pts.forEach((p, k) => {
+    const px = ox + p.x * sc, py = oy + p.y * sc, v = lect[k];
+    ctx.fillStyle = (v === null || vv.length < 2 || vmin === vmax) ? '#dc2626' : v === vmin ? '#2563eb' : v === vmax ? '#16a34a' : '#dc2626';
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    if (v !== null && cw * sc > 30) { ctx.fillStyle = '#0f172a'; ctx.fillText(String(v), px, py + r + 11); }
+  });
+  // Cotas
+  ctx.fillStyle = '#334155';
+  ctx.font = '13px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('L = ' + L.toFixed(2) + ' m', ox + rw / 2, oy + rh + 18);
+  ctx.save();
+  // La cota del ancho se ubica a la derecha del plano para despejar el margen izquierdo.
+  ctx.translate(ox + rw + 14, oy + rh / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('A = ' + A.toFixed(2) + ' m', 0, 0);
+  ctx.restore();
+}
+
+function actualizarResumenLux() {
+  const els = [...document.querySelectorAll('.lux-input')];
+  const total = els.length;
+  if (!total) { $('luxSummary').textContent = 'Primero calcule la grilla; luego ingrese las lecturas de iluminancia en lux.'; return; }
+  const vals = []; let na = 0, mal = 0;
+  els.forEach(el => {
+    const q = leerLux(el);
+    el.classList.toggle('bad', q.t === 'mal');
+    if (q.t === 'ok') vals.push(q.v); else if (q.t === 'na') na++; else if (q.t === 'mal') mal++;
+  });
+  let h = `Lecturas cargadas: <b>${vals.length} de ${total}</b>` + (na ? ` · No aplica: <b>${na}</b>` : '');
+  if (mal) h += `<br><span style="color:#b91c1c">⚠ ${mal} valor(es) inválido(s) en rojo: use solo números (coma o punto decimal) o "NA" si no se puede medir. No entran en el cálculo.</span>`;
+  if (vals.length) {
+    const prom = vals.reduce((a, b) => a + b, 0) / vals.length, mn = Math.min(...vals), mx = Math.max(...vals);
+    h += `<br>Promedio (Emed): <b>${prom.toFixed(1)} lux</b> · Mínimo: <b>${mn.toFixed(1)}</b> · Máximo: <b>${mx.toFixed(1)}</b>`;
+    if (prom > 0) {
+      const u = mn / prom;
+      h += `<br>Uniformidad Emín/Emed: <b>${u.toFixed(2)}</b> (${u >= 0.5 ? 'cumple' : 'NO cumple'} Emín ≥ Emed/2)` + (vals.length + na < total ? ' · parcial: faltan lecturas' : '');
+    }
+  }
+  $('luxSummary').innerHTML = h;
+  redibujar();
+}
+
+function horaLocal() {
+  const ahora = new Date();
+  return ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function iniciarRegistroHorario() {
+  $('horaInicio').value = horaLocal();
+  $('horaFin').value = '';
+}
+
+function exportarPDF() {
+  if ($('gridCard').classList.contains('hidden')) {
+    alert('Primero complete las dimensiones y calcule la grilla.');
+    return;
+  }
+  $('horaFin').value = horaLocal();
+  $('obsPrint').textContent = $('observaciones').value;
+  registrar(); guardar();
+  document.title = `Ficha_Iluminacion_${($('sector').value || 'Sector').trim().replace(/[^a-z0-9-_]+/gi, '_')}_${$('fecha').value || 'sin_fecha'}`;
+  window.print();
+}
+
+function nuevaFicha() {
+  if (!confirm('¿Iniciar un sector nuevo? El sector actual queda guardado en el registro del equipo si tiene lecturas.')) return;
+  registrar();
+  ['sector','origen','L','A','H','nCols','nFilas','observaciones'].forEach(id => $(id).value = '');   // empresa y establecimiento se conservan
+  $('fecha').value = fechaLocalISO();
+  iniciarRegistroHorario();
+  $('resultCard').classList.add('hidden');
+  $('gridCard').classList.add('hidden');
+  $('tbody').innerHTML = '';
+  $('luxSummary').textContent = 'Primero calcule la grilla; luego ingrese las lecturas de iluminancia en lux.';
+  $('err').style.display = 'none';
+  estado = null; $('stale').style.display = 'none'; $('obsPrint').textContent = ''; guardar();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function fechaLocalISO() {
+  const ahora = new Date();
+  const offset = ahora.getTimezoneOffset() * 60000;
+  return new Date(ahora.getTime() - offset).toISOString().slice(0, 10);
+}
+
+$('btnCalc').addEventListener('click', () => { calcular(); guardar(); });
+$('btnPdf').addEventListener('click', exportarPDF);
+$('btnNew').addEventListener('click', nuevaFicha);
+$('btnCsv').addEventListener('click', descargarCSV);
+$('btnClr').addEventListener('click', borrarRegistro);
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.classList && t.classList.contains('lux-input')) actualizarResumenLux();
+  if (t.id === 'modo') aplicarModo();
+  if (['L','A','H','nCols','nFilas','modo'].includes(t.id)) verificarVigencia();
+  if (t.id === 'observaciones') $('obsPrint').textContent = t.value;
+  guardar();
+});
+$('tbody').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !e.target.classList.contains('lux-input')) return;
+  e.preventDefault();
+  const l = [...document.querySelectorAll('.lux-input')], k = l.indexOf(e.target);
+  if (l[k + 1]) l[k + 1].focus(); else e.target.blur();
+});
+restaurar();
+aplicarModo();
+if (!$('fecha').value) $('fecha').value = fechaLocalISO();
+if (!$('horaInicio').value) iniciarRegistroHorario();
+actualizarRegistro();
+// El teclado del móvil dispara resize: solo se redibuja el esquema, la tabla no se toca.
+window.addEventListener('resize', redibujar);
+</script>
+<script>
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>
