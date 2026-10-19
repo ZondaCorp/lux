@@ -117,11 +117,10 @@
     <p>Puntos de medición de iluminación - Grilla</p>
   </header>
 
-  <div class="card no-print" id="modoCard">
-    <h2>Modo de grilla</h2>
-    <div class="field"><select id="modo" aria-label="Modo de grilla">
-      <option value="norma">Normativo</option>
-      <option value="custom">Personalizado</option>
+  <div class="card no-print" id="modoCard" style="padding:10px 14px;margin-bottom:10px">
+    <div class="field" style="margin:0"><select id="modo" aria-label="Modo de grilla">
+      <option value="norma">Grilla normativa (N según índice K)</option>
+      <option value="custom">Grilla personalizada (defino columnas y filas)</option>
     </select></div>
   </div>
 
@@ -162,16 +161,6 @@
     <button id="btnCalc" class="no-print">Calcular puntos de medición</button>
     <div class="error" id="err">Ingresa valores mayores que cero en los tres campos.</div>
     <div class="error" id="stale">Cambiaste las dimensiones: volvé a calcular para actualizar la grilla.</div>
-  </div>
-
-  <div class="card" id="formCard" data-norma>
-    <h2>Fórmulas aplicadas</h2>
-    <div class="formula">
-K = (L × A) / (Hm × (L + A))<br>
-x = índice K redondeado al entero superior<br>
-  (si K ≥ 3 → x = 4)<br>
-N = (x + 2)²
-    </div>
   </div>
 
   <div class="card hidden" id="resultCard">
