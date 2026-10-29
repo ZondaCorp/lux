@@ -163,9 +163,6 @@
     <div class="field"><label for="croquis">Croquis / plano de referencia</label><input type="text" id="croquis" placeholder="Ej.: Croquis 3 - hoja 1"></div>
     <div class="field"><label for="origen">Origen / orientación del croquis</label><input type="text" id="origen" placeholder="Ej.: A1 junto a la puerta de ingreso"></div>
     <div class="field"><label for="fecha">Fecha de relevamiento</label><input type="date" id="fecha"><div class="venc" id="venc"></div></div>
-    <div class="field"><label for="horaInicio">Hora de inicio</label><input type="time" id="horaInicio"></div>
-    <div class="field"><label for="horaFin">Hora de fin</label><input type="text" id="horaFin" readonly aria-readonly="true" placeholder="Se registra al exportar el PDF"></div>
-    <p class="legend no-print">La hora de inicio se registra al abrir o iniciar una ficha nueva. La hora de fin se registra al exportar el PDF.</p>
   </div>
 
   <div class="card" id="condCard">
@@ -288,7 +285,7 @@
 
   <div class="actions no-print">
     <button id="btnPdf">Exportar ficha PDF</button>
-    <button id="btnNew">Nueva ficha / sector</button>
+    <button id="btnNew">Guardar y nuevo sector</button>
   </div>
   <div class="card no-print" id="regCard">
     <h2>5. Sectores registrados en este equipo</h2>
@@ -316,9 +313,10 @@ function numeroColumna(n) {
 
 let estado = null;
 const CHIPS = ['atm','tipoIlum','fuente'];
-const IDS = ['empresa','establecimiento','sector','croquis','origen','fecha','horaInicio','horaFin','modo','L','A','H','nCols','nFilas','observaciones',
+const IDS = ['empresa','establecimiento','sector','croquis','origen','fecha','modo','L','A','H','nCols','nFilas','observaciones',
              'atm','tipoIlum','fuente'];
 const KEY = 'lux_v6_ficha', KREG = 'lux_v6_reg', KNUM = 'lux_v6_num';
+let horasG = {};  // hora de cada lectura de grilla, por punto (se registra sola al cargar el valor)
 let ptosP = [];   // puntos del sector en modo puestos: { n, hora, lux }
 const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function snapActual() {
@@ -450,7 +448,7 @@ function verificarVigencia() {
 
 function guardar() {
   try {
-    const d = { campos: {}, lect: {}, cd: null, ptos: ptosP };
+    const d = { campos: {}, lect: {}, cd: null, ptos: ptosP, horasG };
     IDS.forEach(id => d.campos[id] = $(id).value);
     document.querySelectorAll('#tbody .lux-input').forEach(el => d.lect[el.dataset.point] = el.value);
     if (estado) { const q = estado.snap.split('|'); d.cd = { L: q[0], A: q[1], H: q[2], modo: q[3], nCols: q[4], nFilas: q[5] }; }
@@ -465,6 +463,7 @@ function restaurar() {
     IDS.forEach(id => { if (d.campos[id] !== undefined) $(id).value = d.campos[id]; });
     $('obsPrint').textContent = $('observaciones').value;
     ptosP = Array.isArray(d.ptos) ? d.ptos : [];
+    horasG = d.horasG || {};
     if (d.cd) {
       $('modo').value = d.cd.modo || 'norma'; $('nCols').value = d.cd.nCols || ''; $('nFilas').value = d.cd.nFilas || '';
       $('L').value = d.cd.L; $('A').value = d.cd.A; $('H').value = d.cd.H || '';
@@ -525,7 +524,7 @@ function registrar() {
     cumpleUnif: prom > 0 ? (mn / prom >= 0.5 ? 'Sí' : 'No') : '',
     vence: fechaVence(),
     lect: els.map((el, i) => et[i] + '=' + el.value.trim()).join(' '),
-    ptos: els.map((el, i) => ({ etq: et[i], lux: el.value.trim() })).filter(q => q.lux !== '')
+    ptos: els.map((el, i) => ({ etq: et[i], lux: el.value.trim(), hora: horasG[el.dataset.point] || '' })).filter(q => q.lux !== '')
   });
   // Conserva los N° ya asignados a este sector (si se vuelve a guardar), o toma los siguientes del contador global.
   const prev = leerReg().find(r => [r.establecimiento, r.sector, r.fecha].join('|') === [f.establecimiento, f.sector, f.fecha].join('|'));
@@ -642,6 +641,7 @@ function calcular() {
   const cambia = estado && (estado.nL !== nL || estado.nA !== nA);
   if (hayLect && cambia && !confirm('La grilla cambió de ' + estado.nL + '×' + estado.nA + ' a ' + nL + '×' + nA + '. Las lecturas cargadas ya no corresponden a los mismos puntos y se borrarán. ¿Continuar?')) return;
   const prev = cambia ? {} : lecturasPrevias;
+  if (cambia) horasG = {};
   const total = nL * nA;
   const cw = L / nL, ch = A / nA;             // dimensiones reales de cada área
 
@@ -783,11 +783,6 @@ function horaLocal() {
   return ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
-function iniciarRegistroHorario() {
-  $('horaInicio').value = horaLocal();
-  $('horaFin').value = '';
-}
-
 function exportarPDF() {
   const porPuestos = $('modo').value === 'puestos';
   if (porPuestos ? !ptosP.length : $('gridCard').classList.contains('hidden')) {
@@ -799,7 +794,6 @@ function exportarPDF() {
     .forEach(([id, t]) => { if (!$(id).value) faltan.push(t); });
   if (faltan.length && !confirm('Faltan datos del sector: ' + faltan.join(', ') + '.\n\n¿Exportar igual?')) return;
 
-  $('horaFin').value = horaLocal();
   $('obsPrint').textContent = $('observaciones').value;
   registrar(); guardar();
   document.title = `Ficha_Iluminacion_${($('sector').value || 'Sector').trim().replace(/[^a-z0-9-_]+/gi, '_')}_${$('fecha').value || 'sin_fecha'}`;
@@ -807,20 +801,19 @@ function exportarPDF() {
 }
 
 function nuevaFicha() {
-  if (!confirm('¿Iniciar un sector nuevo? El sector actual queda guardado en el registro del equipo si tiene lecturas.')) return;
+  if (!confirm('¿Guardar este sector y empezar uno nuevo? El sector actual queda guardado en el registro del equipo si tiene lecturas.')) return;
   registrar();
   // Se conservan: empresa, establecimiento, croquis y condiciones atmosféricas.
   ['sector','origen','L','A','H','nCols','nFilas','observaciones','tipoIlum','fuente'].forEach(id => $(id).value = '');
   syncChips();
   $('fecha').value = fechaLocalISO();
   actualizarVigencia();
-  iniciarRegistroHorario();
   $('resultCard').classList.add('hidden');
   $('gridCard').classList.add('hidden');
   $('tbody').innerHTML = '';
   $('luxSummary').textContent = 'Primero calcule la grilla; luego ingrese las lecturas de iluminancia en lux.';
   $('err').style.display = 'none';
-  ptosP = []; $('pLux').value = ''; $('pOk').style.display = 'none'; $('pErr').style.display = 'none'; renderPuestos();   // la numeración continúa
+  ptosP = []; horasG = {}; $('pLux').value = ''; $('pOk').style.display = 'none'; $('pErr').style.display = 'none'; renderPuestos();   // la numeración continúa
   estado = null; $('stale').style.display = 'none'; $('obsPrint').textContent = ''; guardar();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
@@ -850,7 +843,11 @@ document.addEventListener('input', e => {
   if (t.id === 'pLux') return;
   if (t.classList && t.classList.contains('p-lux')) { ptosP[+t.dataset.i].lux = t.value.trim(); resumenPuestos(); guardar(); return; }
   if (t.id === 'pNext') { const v = parseInt(t.value, 10); if (v >= 1) fijarNext(v); return; }
-  if (t.classList && t.classList.contains('lux-input') && !t.classList.contains('p-lux')) actualizarResumenLux();
+  if (t.classList && t.classList.contains('lux-input') && !t.classList.contains('p-lux')) {
+    const k = t.dataset.point;
+    if (t.value.trim() === '') delete horasG[k]; else if (!horasG[k]) horasG[k] = horaLocal();
+    actualizarResumenLux();
+  }
   if (t.id === 'modo') aplicarModo();
   if (['L','A','H','nCols','nFilas','modo'].includes(t.id)) verificarVigencia();
   if (t.id === 'observaciones') $('obsPrint').textContent = t.value;
@@ -869,7 +866,6 @@ $('pNext').value = leerNext();
 renderPuestos();
 syncChips();
 if (!$('fecha').value) $('fecha').value = fechaLocalISO();
-if (!$('horaInicio').value) iniciarRegistroHorario();
 actualizarVigencia();
 actualizarRegistro();
 // El teclado del móvil dispara resize: solo se redibuja el esquema, la tabla no se toca.
