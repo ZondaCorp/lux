@@ -96,6 +96,7 @@
   .next-box .sub { font-size: .78rem; opacity: .85; }
   #pLux { font-size: 1.6rem; text-align: center; }
   #btnAdd { background: #0f766e; margin-top: 10px; }
+  #btnNoMed { background: #fff; color: #475569; border: 1px solid #cbd5e1; font-size: .92rem; padding: 10px; margin-top: 8px; }
   #btnUndo { background: #e2e8f0; color: #0f172a; font-size: .9rem; padding: 10px; margin-top: 10px; }
   .ok-msg { background: #dcfce7; color: #14532d; border-radius: 8px; padding: 8px 10px; margin-top: 10px; font-size: .9rem; display: none; }
   .p-num { font-weight: 800; font-size: .95rem; }
@@ -143,7 +144,7 @@
 <div class="wrap">
   <header>
     <h1>ZONDA CORP SRL</h1>
-    <p>App soporte de medición de iluminación</p>
+    <p>Medición de iluminación (Res. SRT 84/2012)</p>
   </header>
 
   <div class="card no-print" id="modoCard" style="padding:10px 14px;margin-bottom:10px">
@@ -261,6 +262,7 @@
         <div class="input-row"><input type="text" id="pLux" inputmode="decimal" autocomplete="off" placeholder="lux" enterkeyhint="done"><span class="unit">lux</span></div>
       </div>
       <button id="btnAdd" type="button">Registrar punto</button>
+      <button id="btnNoMed" type="button">No se pudo medir ( - )</button>
       <div class="ok-msg" id="pOk"></div>
       <div class="error" id="pErr"></div>
       <div class="field" style="margin-top:12px">
@@ -358,7 +360,7 @@ function resumenPuestos() {
     const q = leerLux(el); el.classList.toggle('bad', q.t === 'mal');
     if (q.t === 'ok') vals.push(q.v); else if (q.t === 'na') na++; else if (q.t === 'mal') mal++;
   });
-  let h = `Puntos registrados: <b>${ptosP.length}</b> (N° ${ptosP[0].n} a ${ptosP[ptosP.length - 1].n})` + (na ? ` · No aplica: <b>${na}</b>` : '');
+  let h = `Puntos registrados: <b>${ptosP.length}</b> (N° ${ptosP[0].n} a ${ptosP[ptosP.length - 1].n})` + (na ? ` · No se pudo medir: <b>${na}</b>` : '');
   if (vals.length) h += `<br>Mínimo: <b>${Math.min(...vals).toFixed(1)} lux</b> · Máximo: <b>${Math.max(...vals).toFixed(1)} lux</b>`;
   if (mal) h += `<br><span style="color:#b91c1c">⚠ ${mal} valor(es) inválido(s) en rojo.</span>`;
   h += '<br><i>Medición puntual: la uniformidad no aplica (se informa "-").</i>';
@@ -368,17 +370,17 @@ function agregarPunto() {
   const el = $('pLux'), q = leerLux(el);
   $('pErr').style.display = 'none';
   if (q.t === 'vacio' || q.t === 'mal') {
-    $('pErr').textContent = q.t === 'vacio' ? 'Ingresá el valor medido en lux (o "NA" si no se pudo medir).' : 'Valor inválido: usá solo números, con coma o punto decimal, o "NA".';
+    $('pErr').textContent = q.t === 'vacio' ? 'Ingresá el valor medido en lux, o tocá "No se pudo medir".' : 'Valor inválido: usá solo números, con coma o punto decimal, o "-".';
     $('pErr').style.display = 'block'; el.focus(); return;
   }
   const n = leerNext();
   if (ptosP.some(r => r.n === n) && !confirm('El punto N° ' + n + ' ya está cargado en este sector. ¿Registrarlo igual?')) return;
-  const lux = q.t === 'na' ? 'NA' : el.value.trim();
+  const lux = q.t === 'na' ? '-' : el.value.trim();
   ptosP.push({ n, hora: horaLocal(), lux });
   fijarNext(n + 1);
   el.value = '';
   renderPuestos();
-  $('pOk').innerHTML = `✓ Punto <b>${n}</b> = ${esc(lux)}${q.t === 'na' ? '' : ' lux'} · anotá <b>${n}</b> en el croquis`;
+  $('pOk').innerHTML = `✓ Punto <b>${n}</b> = ${esc(lux)}${q.t === 'na' ? ' (no se pudo medir)' : ' lux'} · anotá <b>${n}</b> en el croquis`;
   $('pOk').style.display = 'block';
   guardar();
   el.focus();   // deja el teclado abierto para el próximo punto
@@ -427,7 +429,7 @@ function elegirGrilla(L, A, N) {
 function leerLux(el) {
   const t = el.value.trim();
   if (t === '') return { t: 'vacio' };
-  if (/^(n\/?a|x)$/i.test(t)) return { t: 'na' };
+  if (/^(n\/?a|x|-|–|—)$/i.test(t)) return { t: 'na' };   // "-" = no se pudo medir
   if (/^\d{1,3}[.,]\d{3}$/.test(t) || !/^\d+([.,]\d+)?$/.test(t)) return { t: 'mal' };
   return { t: 'ok', v: parseFloat(t.replace(',', '.')) };
 }
@@ -573,7 +575,7 @@ function descargarCSV() {
     filas.push({
       n: p.n, hora: p.hora || r.horaInicio || '', sector: r.sector, puesto: '', tipoIlum: r.tipoIlum, fuente: r.fuente, sistema: '',
       unif: grilla && typeof r.unif === 'number' ? fmt(r.unif) + ' - ' + (r.unif >= 0.5 ? 'Cumple' : 'No cumple') : '-',
-      lux: v.t === 'ok' ? v.v : p.lux, req: '',
+      lux: v.t === 'ok' ? v.v : v.t === 'na' ? '-' : p.lux, req: '',
       etq: grilla ? p.etq : '', modo: grilla ? (r.modo === 'Personalizada' ? 'Grilla personalizada' : 'Grilla normativa') : 'Por puestos',
       fecha: r.fecha, establecimiento: r.establecimiento, croquis: r.croquis, atm: r.atm,
       emed: grilla ? r.prom : '', emin: grilla ? r.mn : '', emax: grilla ? r.mx : '',
@@ -761,8 +763,8 @@ function actualizarResumenLux() {
     el.classList.toggle('bad', q.t === 'mal');
     if (q.t === 'ok') vals.push(q.v); else if (q.t === 'na') na++; else if (q.t === 'mal') mal++;
   });
-  let h = `Lecturas cargadas: <b>${vals.length} de ${total}</b>` + (na ? ` · No aplica: <b>${na}</b>` : '');
-  if (mal) h += `<br><span style="color:#b91c1c">⚠ ${mal} valor(es) inválido(s) en rojo: use solo números (coma o punto decimal) o "NA" si no se puede medir. No entran en el cálculo.</span>`;
+  let h = `Lecturas cargadas: <b>${vals.length} de ${total}</b>` + (na ? ` · No se pudo medir: <b>${na}</b>` : '');
+  if (mal) h += `<br><span style="color:#b91c1c">⚠ ${mal} valor(es) inválido(s) en rojo: use solo números (coma o punto decimal) o "-" si no se pudo medir. No entran en el cálculo.</span>`;
   if (vals.length) {
     const prom = vals.reduce((a, b) => a + b, 0) / vals.length, mn = Math.min(...vals), mx = Math.max(...vals);
     h += `<br>Promedio (Emed): <b>${prom.toFixed(1)} lux</b> · Mínimo: <b>${mn.toFixed(1)}</b> · Máximo: <b>${mx.toFixed(1)}</b>`;
@@ -835,6 +837,7 @@ $('btnNew').addEventListener('click', nuevaFicha);
 $('btnCsv').addEventListener('click', descargarCSV);
 $('btnClr').addEventListener('click', borrarRegistro);
 $('btnAdd').addEventListener('click', agregarPunto);
+$('btnNoMed').addEventListener('click', () => { $('pLux').value = '-'; agregarPunto(); });
 $('btnUndo').addEventListener('click', borrarUltimo);
 $('pLux').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarPunto(); } });
 document.addEventListener('change', e => {
