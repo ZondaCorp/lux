@@ -77,7 +77,6 @@
   .lux-input.bad { border-color: #b91c1c; background: #fef2f2; }
   #btnCsv { background: #0f766e; }
   #btnClr { background: #b91c1c; }
-  #btnCsvP { background: #0b3b6f; }
   #obsPrint { white-space: pre-wrap; font-size: 9pt; }
 
   /* Selectores de un toque */
@@ -144,14 +143,14 @@
 <div class="wrap">
   <header>
     <h1>ZONDA CORP SRL</h1>
-    <p>App de soporte de medición de iluminación</p>
+    <p>Medición de iluminación (Res. SRT 84/2012)</p>
   </header>
 
   <div class="card no-print" id="modoCard" style="padding:10px 14px;margin-bottom:10px">
     <div class="field" style="margin:0"><select id="modo" aria-label="Modo de grilla">
+      <option value="puestos">Medición por puestos (puntos numerados)</option>
       <option value="norma">Grilla normativa (N según índice K)</option>
       <option value="custom">Grilla personalizada (defino columnas y filas)</option>
-      <option value="puestos">Medición por puestos (puntos numerados)</option>
     </select></div>
   </div>
 
@@ -239,10 +238,10 @@
   <div class="card hidden" id="gridCard">
     <h2>3. Grilla de medición</h2>
     <canvas id="cv" width="600" height="600"></canvas>
-    <div class="legend">● Punto (azul = mínimo, verde = máximo) · Columnas con letras y filas con números (ej.: A1) · Origen X=0, Y=0: esquina superior izquierda del esquema</div>
+    <div class="legend">● Punto (azul = mínimo, verde = máximo) · Columnas con letras y filas con números (ej.: A1) · Origen X=0, Y=0: esquina superior izquierda del esquema · El N° de muestreo se asigna al guardar el sector</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Punto</th><th>Fila</th><th>Columna</th><th>X (m)</th><th>Y (m)</th><th>Iluminancia (lux)</th></tr></thead>
+        <thead><tr><th>N°</th><th>Punto</th><th>Fila</th><th>Columna</th><th>X (m)</th><th>Y (m)</th><th>Iluminancia (lux)</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -292,8 +291,9 @@
   <div class="card no-print" id="regCard">
     <h2>5. Sectores registrados en este equipo</h2>
     <div class="summary-line" id="regInfo"></div>
-    <div class="actions" style="margin-top:10px;margin-bottom:10px"><button id="btnCsv">CSV por sector</button><button id="btnCsvP">CSV por punto (protocolo)</button></div>
-    <button id="btnClr">Borrar registro</button>
+    <button id="btnCsv" style="margin-top:10px">Exportar CSV del relevamiento</button>
+    <p class="hint">Una fila por punto de muestreo (grilla y puestos), con las columnas de la planilla del protocolo.</p>
+    <button id="btnClr" style="margin-top:10px">Borrar registro</button>
   </div>
   <footer>Registro de cálculo y medición de iluminancia · V6 · Las lecturas deben efectuarse en el centro de cada área.</footer>
 </div>
@@ -522,9 +522,25 @@ function registrar() {
     puntos: els.length, cargadas: vals.length, prom, mn, mx, unif: prom > 0 ? mn / prom : null,
     cumpleUnif: prom > 0 ? (mn / prom >= 0.5 ? 'Sí' : 'No') : '',
     vence: fechaVence(),
-    lect: els.map((el, i) => et[i] + '=' + el.value.trim()).join(' ')
+    lect: els.map((el, i) => et[i] + '=' + el.value.trim()).join(' '),
+    ptos: els.map((el, i) => ({ etq: et[i], lux: el.value.trim() })).filter(q => q.lux !== '')
   });
+  // Conserva los N° ya asignados a este sector (si se vuelve a guardar), o toma los siguientes del contador global.
+  const prev = leerReg().find(r => [r.establecimiento, r.sector, r.fecha].join('|') === [f.establecimiento, f.sector, f.fecha].join('|'));
+  const nums = {};
+  if (prev && Array.isArray(prev.ptos)) prev.ptos.forEach(q => { if (q.etq && q.n) nums[q.etq] = q.n; });
+  f.ptos.forEach(q => { q.n = nums[q.etq] || tomarNumero(); });
   guardarEnRegistro(f);
+  mostrarNumGrilla();
+}
+
+function tomarNumero() { const n = leerNext(); fijarNext(n + 1); return n; }
+
+function mostrarNumGrilla() {
+  const r = leerReg().find(r => [r.establecimiento, r.sector, r.fecha].join('|') === [$('establecimiento').value, $('sector').value, $('fecha').value].join('|'));
+  const nums = {};
+  if (r && Array.isArray(r.ptos)) r.ptos.forEach(q => { if (q.etq) nums[q.etq] = q.n; });
+  document.querySelectorAll('#tbody .g-num').forEach(td => { td.textContent = nums[td.dataset.etq] || '-'; });
 }
 
 function actualizarRegistro() {
@@ -534,17 +550,44 @@ function actualizarRegistro() {
     : 'Ninguno todavía. Cada sector se guarda al exportar el PDF o al iniciar un sector nuevo.';
 }
 
+// Exportación global: una fila por punto de muestreo (grilla y puestos), con las columnas de la planilla
+// del protocolo (Res. SRT 84/2012). Puesto, sistema y valor requerido quedan vacíos para completar con el croquis.
 function descargarCSV() {
   registrar();
   const reg = leerReg();
-  if (!reg.length) { alert('No hay sectores guardados todavía.'); return; }
-  const cols = [['Empresa','empresa'],['Establecimiento','establecimiento'],['Sector','sector'],['Croquis','croquis'],['Origen/orientación','origen'],
-    ['Fecha','fecha'],['Hora inicio','horaInicio'],['Hora fin','horaFin'],['Válida hasta','vence'],
-    ['Condiciones atmosféricas','atm'],['Tipo de iluminación','tipoIlum'],['Tipo de fuente','fuente'],
-    ['L (m)','L'],['A (m)','A'],['Hm (m)','H'],['K','K'],['N mínimo','N'],['Grilla (col×filas)','grilla'],['Modo de grilla','modo'],['Puntos','puntos'],['Cargadas','cargadas'],
-    ['Emed (lux)','prom'],['Emín (lux)','mn'],['Emáx (lux)','mx'],['Emín/Emed','unif'],['Cumple uniformidad','cumpleUnif'],
-    ['Observaciones','observaciones'],['Lecturas','lect']];
-  bajarCSV(cols, reg, 'Relevamiento_iluminacion_');
+  // Sectores de grilla guardados por versiones anteriores: se les arma la lista de puntos y se numeran.
+  let cambio = false;
+  reg.forEach(r => {
+    if (r.modo === 'Por puestos' || Array.isArray(r.ptos) || !r.lect) return;
+    r.ptos = r.lect.split(' ').map(t => { const [etq, lux] = t.split('='); return { etq, lux: (lux || '').trim() }; })
+      .filter(q => q.lux !== '').map(q => ({ ...q, n: tomarNumero() }));
+    cambio = true;
+  });
+  if (cambio) try { localStorage.setItem(KREG, JSON.stringify(reg)); } catch (e) {}
+
+  const fmt = x => (typeof x === 'number' ? x.toFixed(2) : String(x)).replace('.', ',');
+  const filas = [];
+  reg.forEach(r => (r.ptos || []).forEach(p => {
+    const v = leerLux({ value: String(p.lux) });
+    const grilla = r.modo !== 'Por puestos';
+    filas.push({
+      n: p.n, hora: p.hora || r.horaInicio || '', sector: r.sector, puesto: '', tipoIlum: r.tipoIlum, fuente: r.fuente, sistema: '',
+      unif: grilla && typeof r.unif === 'number' ? fmt(r.unif) + ' - ' + (r.unif >= 0.5 ? 'Cumple' : 'No cumple') : '-',
+      lux: v.t === 'ok' ? v.v : p.lux, req: '',
+      etq: grilla ? p.etq : '', modo: grilla ? (r.modo === 'Personalizada' ? 'Grilla personalizada' : 'Grilla normativa') : 'Por puestos',
+      fecha: r.fecha, establecimiento: r.establecimiento, croquis: r.croquis, atm: r.atm,
+      emed: grilla ? r.prom : '', emin: grilla ? r.mn : '', emax: grilla ? r.mx : '',
+      grillaDim: r.grilla || '', K: r.K ? String(r.K).replace('.', ',') : '', L: r.L, A: r.A, H: r.H, obs: r.observaciones
+    });
+  }));
+  if (!filas.length) { alert('No hay sectores con lecturas guardadas todavía.'); return; }
+  filas.sort((a, b) => a.n - b.n);
+  bajarCSV([['Punto de muestreo','n'],['Hora','hora'],['Sector','sector'],['Sección / Puesto / Puesto tipo','puesto'],
+    ['Tipo de iluminación','tipoIlum'],['Tipo de fuente lumínica','fuente'],['Iluminación general / localizada / mixta','sistema'],
+    ['Uniformidad Emín ≥ Emed/2','unif'],['Valor medido (lux)','lux'],['Valor requerido Anexo IV Dto. 351/79','req'],
+    ['Punto de grilla','etq'],['Modo','modo'],['Fecha','fecha'],['Establecimiento','establecimiento'],['Croquis','croquis'],['Condiciones atmosféricas','atm'],
+    ['Emed sector (lux)','emed'],['Emín sector (lux)','emin'],['Emáx sector (lux)','emax'],['Grilla (col×filas)','grillaDim'],['K','K'],
+    ['L (m)','L'],['A (m)','A'],['Hm (m)','H'],['Observaciones','obs']], filas, 'Relevamiento_iluminacion_');
 }
 
 function csvCelda(v) {
@@ -558,24 +601,6 @@ function bajarCSV(cols, filas, prefijo) {
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   a.download = prefijo + fechaLocalISO() + '.csv';
   document.body.appendChild(a); a.click(); a.remove();
-}
-
-// Una fila por punto, con las columnas de la planilla del protocolo (Res. SRT 84/2012).
-// Puesto, sistema y valor requerido quedan vacíos para completar en oficina con el croquis.
-function descargarCSVPuntos() {
-  registrar();
-  const filas = [];
-  leerReg().filter(r => Array.isArray(r.ptos)).forEach(r => r.ptos.forEach(p => {
-    const v = leerLux({ value: String(p.lux) });
-    filas.push({ n: p.n, hora: p.hora, sector: r.sector, puesto: '', tipoIlum: r.tipoIlum, fuente: r.fuente, sistema: '', unif: '-',
-                 lux: v.t === 'ok' ? v.v : p.lux, req: '', fecha: r.fecha, establecimiento: r.establecimiento, croquis: r.croquis, atm: r.atm });
-  }));
-  if (!filas.length) { alert('No hay puntos medidos por puestos todavía.'); return; }
-  filas.sort((a, b) => a.n - b.n);
-  bajarCSV([['Punto de muestreo','n'],['Hora','hora'],['Sector','sector'],['Sección / Puesto / Puesto tipo','puesto'],
-    ['Tipo de iluminación','tipoIlum'],['Tipo de fuente lumínica','fuente'],['Iluminación general / localizada / mixta','sistema'],
-    ['Uniformidad Emín ≥ Emed/2','unif'],['Valor medido (lux)','lux'],['Valor requerido Anexo IV Dto. 351/79','req'],
-    ['Fecha','fecha'],['Establecimiento','establecimiento'],['Croquis','croquis'],['Condiciones atmosféricas','atm']], filas, 'Protocolo_puntos_');
 }
 
 function borrarRegistro() {
@@ -645,11 +670,12 @@ function calcular() {
 
   // Tabla
   $('tbody').innerHTML = pts.map((p, k) =>
-    `<tr><td><b>${p.etiqueta}</b></td><td>${p.fila}</td><td>${p.col}</td><td>${p.x.toFixed(2)}</td><td>${p.y.toFixed(2)}</td><td><input class="lux-input" type="text" inputmode="decimal" autocomplete="off" data-point="${k + 1}" aria-label="Iluminancia punto ${k + 1}" placeholder="lux" enterkeyhint="next"></td></tr>`
+    `<tr><td class="g-num" data-etq="${p.etiqueta}">-</td><td><b>${p.etiqueta}</b></td><td>${p.fila}</td><td>${p.col}</td><td>${p.x.toFixed(2)}</td><td>${p.y.toFixed(2)}</td><td><input class="lux-input" type="text" inputmode="decimal" autocomplete="off" data-point="${k + 1}" aria-label="Iluminancia punto ${k + 1}" placeholder="lux" enterkeyhint="next"></td></tr>`
   ).join('');
   document.querySelectorAll('#tbody .lux-input').forEach(el => { el.value = prev[el.dataset.point] || ''; });
   actualizarResumenLux();
   estado = { L, A, nL, nA, cw, ch, pts, modo, H: modo === 'norma' ? H : '', snap: snapActual() };
+  mostrarNumGrilla();
   verificarVigencia();
   redibujar();
 }
@@ -808,7 +834,6 @@ $('btnPdf').addEventListener('click', exportarPDF);
 $('btnNew').addEventListener('click', nuevaFicha);
 $('btnCsv').addEventListener('click', descargarCSV);
 $('btnClr').addEventListener('click', borrarRegistro);
-$('btnCsvP').addEventListener('click', descargarCSVPuntos);
 $('btnAdd').addEventListener('click', agregarPunto);
 $('btnUndo').addEventListener('click', borrarUltimo);
 $('pLux').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarPunto(); } });
