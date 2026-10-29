@@ -77,6 +77,7 @@
   .lux-input.bad { border-color: #b91c1c; background: #fef2f2; }
   #btnCsv { background: #0f766e; }
   #btnClr { background: #b91c1c; }
+  #btnCsvP { background: #0b3b6f; }
   #obsPrint { white-space: pre-wrap; font-size: 9pt; }
 
   /* Selectores de un toque */
@@ -88,6 +89,17 @@
   .chip input:focus-visible + span { outline: 2px solid #2563eb; }
 
   .venc { font-size: .8rem; color: #475569; margin-top: 4px; }
+
+  /* Medición por puestos */
+  .next-box { background: #0b3b6f; color: #fff; border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 12px; }
+  .next-box .lbl { font-size: .8rem; opacity: .85; }
+  .next-box .big { font-size: 2.6rem; font-weight: 800; line-height: 1.1; }
+  .next-box .sub { font-size: .78rem; opacity: .85; }
+  #pLux { font-size: 1.6rem; text-align: center; }
+  #btnAdd { background: #0f766e; margin-top: 10px; }
+  #btnUndo { background: #e2e8f0; color: #0f172a; font-size: .9rem; padding: 10px; margin-top: 10px; }
+  .ok-msg { background: #dcfce7; color: #14532d; border-radius: 8px; padding: 8px 10px; margin-top: 10px; font-size: .9rem; display: none; }
+  .p-num { font-weight: 800; font-size: .95rem; }
 
   @page { size: A4 portrait; margin: 12mm; }
   @media print {
@@ -124,6 +136,7 @@
     .chip span { border: none; padding: 0; min-height: 0; background: none !important; color: #111827 !important; font-weight: 600; font-size: 9pt; }
     .chips:not(:has(input:checked))::after { content: '— sin dato —'; font-size: 9pt; color: #6b7280; }
     .venc { font-size: 8pt; }
+    .card#puestosCard { break-inside: auto; }
   }
 </style>
 </head>
@@ -131,13 +144,14 @@
 <div class="wrap">
   <header>
     <h1>ZONDA CORP SRL</h1>
-    <p>App de soporte para medición de iluminación</p>
+    <p>Medición de iluminación (Res. SRT 84/2012)</p>
   </header>
 
   <div class="card no-print" id="modoCard" style="padding:10px 14px;margin-bottom:10px">
     <div class="field" style="margin:0"><select id="modo" aria-label="Modo de grilla">
       <option value="norma">Grilla normativa (N según índice K)</option>
       <option value="custom">Grilla personalizada (defino columnas y filas)</option>
+      <option value="puestos">Medición por puestos (puntos numerados)</option>
     </select></div>
   </div>
 
@@ -146,7 +160,6 @@
     <div class="field"><label for="empresa">Empresa</label><input type="text" id="empresa"  placeholder="Empresa / cliente"></div>
     <div class="field"><label for="establecimiento">Establecimiento / ubicación</label><input type="text" id="establecimiento" placeholder="Ej.: Planta, edificio, dirección"></div>
     <div class="field"><label for="sector">Sector</label><input type="text" id="sector" placeholder="Ej.: Depósito"></div>
-    <div class="field"><label for="puesto">Sección / puesto de trabajo</label><input type="text" id="puesto" placeholder="Ej.: Puesto de embalaje 1"></div>
     <div class="field"><label for="croquis">Croquis / plano de referencia</label><input type="text" id="croquis" placeholder="Ej.: Croquis 3 - hoja 1"></div>
     <div class="field"><label for="origen">Origen / orientación del croquis</label><input type="text" id="origen" placeholder="Ej.: A1 junto a la puerta de ingreso"></div>
     <div class="field"><label for="fecha">Fecha de relevamiento</label><input type="date" id="fecha"><div class="venc" id="venc"></div></div>
@@ -236,6 +249,36 @@
     <div class="summary-line" id="luxSummary">Ingrese las lecturas de iluminancia en lux en la tabla. El promedio se calculará con los valores cargados.</div>
   </div>
 
+  <div class="card hidden" id="puestosCard">
+    <h2>Medición por puestos</h2>
+    <div class="no-print">
+      <div class="next-box">
+        <div class="lbl">Próximo punto de muestreo</div>
+        <div class="big" id="pNextShow">1</div>
+        <div class="sub">Anotá este número en el croquis, junto al puesto</div>
+      </div>
+      <div class="field">
+        <label for="pLux">Valor medido</label>
+        <div class="input-row"><input type="text" id="pLux" inputmode="decimal" autocomplete="off" placeholder="lux" enterkeyhint="done"><span class="unit">lux</span></div>
+      </div>
+      <button id="btnAdd" type="button">Registrar punto</button>
+      <div class="ok-msg" id="pOk"></div>
+      <div class="error" id="pErr"></div>
+      <div class="field" style="margin-top:12px">
+        <label for="pNext">Numeración <small>- cambiala solo para continuar otra planilla (ej.: 69)</small></label>
+        <div class="input-row"><input type="text" id="pNext" inputmode="numeric" autocomplete="off"><span class="unit">N°</span></div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Punto</th><th>Hora</th><th>Valor medido (lux)</th></tr></thead>
+        <tbody id="pBody"></tbody>
+      </table>
+    </div>
+    <div class="summary-line" id="pSummary">Todavía no hay puntos registrados en este sector.</div>
+    <button id="btnUndo" type="button" class="no-print">Borrar último punto</button>
+  </div>
+
   <div class="card" id="obsCard">
     <h2>4. Observaciones del relevamiento</h2>
     <textarea id="observaciones" placeholder="Obstáculos, luminarias fuera de servicio, condiciones particulares, desvíos de la grilla... La ubicación de luminarias y ventanas se indica en el croquis."></textarea>
@@ -249,7 +292,8 @@
   <div class="card no-print" id="regCard">
     <h2>5. Sectores registrados en este equipo</h2>
     <div class="summary-line" id="regInfo"></div>
-    <div class="actions" style="margin-top:10px;margin-bottom:0"><button id="btnCsv">Descargar CSV</button><button id="btnClr">Borrar registro</button></div>
+    <div class="actions" style="margin-top:10px;margin-bottom:10px"><button id="btnCsv">CSV por sector</button><button id="btnCsvP">CSV por punto (protocolo)</button></div>
+    <button id="btnClr">Borrar registro</button>
   </div>
   <footer>Registro de cálculo y medición de iluminancia · V6 · Las lecturas deben efectuarse en el centro de cada área.</footer>
 </div>
@@ -270,9 +314,10 @@ function numeroColumna(n) {
 
 let estado = null;
 const CHIPS = ['atm','tipoIlum','fuente'];
-const IDS = ['empresa','establecimiento','sector','puesto','croquis','origen','fecha','horaInicio','horaFin','modo','L','A','H','nCols','nFilas','observaciones',
+const IDS = ['empresa','establecimiento','sector','croquis','origen','fecha','horaInicio','horaFin','modo','L','A','H','nCols','nFilas','observaciones',
              'atm','tipoIlum','fuente'];
-const KEY = 'lux_v6_ficha', KREG = 'lux_v6_reg';
+const KEY = 'lux_v6_ficha', KREG = 'lux_v6_reg', KNUM = 'lux_v6_num';
+let ptosP = [];   // puntos del sector en modo puestos: { n, hora, lux }
 const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function snapActual() {
   const m = $('modo').value;
@@ -280,9 +325,72 @@ function snapActual() {
           m === 'custom' ? parseInt($('nCols').value, 10) : '', m === 'custom' ? parseInt($('nFilas').value, 10) : ''].join('|');
 }
 function aplicarModo() {
-  const c = $('modo').value === 'custom';
+  const m = $('modo').value, c = m === 'custom', p = m === 'puestos';
   document.querySelectorAll('[data-norma]').forEach(e => e.style.display = c ? 'none' : '');
   document.querySelectorAll('[data-custom]').forEach(e => e.style.display = c ? '' : 'none');
+  $('geometryCard').classList.toggle('hidden', p);
+  $('puestosCard').classList.toggle('hidden', !p);
+  if (p) { $('resultCard').classList.add('hidden'); $('gridCard').classList.add('hidden'); }
+}
+
+// ---------- Medición por puestos ----------
+function leerNext() {
+  const v = parseInt($('pNext').value, 10);
+  if (v >= 1) return v;
+  try { const g = parseInt(localStorage.getItem(KNUM), 10); if (g >= 1) return g; } catch (e) {}
+  return 1;
+}
+function fijarNext(n) {
+  $('pNext').value = n; $('pNextShow').textContent = n;
+  try { localStorage.setItem(KNUM, String(n)); } catch (e) {}
+}
+function renderPuestos() {
+  $('pNextShow').textContent = leerNext();
+  $('pBody').innerHTML = ptosP.map((q, i) =>
+    `<tr><td class="p-num">${q.n}</td><td>${esc(q.hora)}</td><td><input class="lux-input p-lux" type="text" inputmode="decimal" autocomplete="off" data-i="${i}" value="${esc(q.lux)}" aria-label="Valor medido punto ${q.n}"></td></tr>`
+  ).join('');
+  resumenPuestos();
+}
+function resumenPuestos() {
+  if (!ptosP.length) { $('pSummary').textContent = 'Todavía no hay puntos registrados en este sector.'; return; }
+  const vals = []; let na = 0, mal = 0;
+  document.querySelectorAll('.p-lux').forEach(el => {
+    const q = leerLux(el); el.classList.toggle('bad', q.t === 'mal');
+    if (q.t === 'ok') vals.push(q.v); else if (q.t === 'na') na++; else if (q.t === 'mal') mal++;
+  });
+  let h = `Puntos registrados: <b>${ptosP.length}</b> (N° ${ptosP[0].n} a ${ptosP[ptosP.length - 1].n})` + (na ? ` · No aplica: <b>${na}</b>` : '');
+  if (vals.length) h += `<br>Mínimo: <b>${Math.min(...vals).toFixed(1)} lux</b> · Máximo: <b>${Math.max(...vals).toFixed(1)} lux</b>`;
+  if (mal) h += `<br><span style="color:#b91c1c">⚠ ${mal} valor(es) inválido(s) en rojo.</span>`;
+  h += '<br><i>Medición puntual: la uniformidad no aplica (se informa "-").</i>';
+  $('pSummary').innerHTML = h;
+}
+function agregarPunto() {
+  const el = $('pLux'), q = leerLux(el);
+  $('pErr').style.display = 'none';
+  if (q.t === 'vacio' || q.t === 'mal') {
+    $('pErr').textContent = q.t === 'vacio' ? 'Ingresá el valor medido en lux (o "NA" si no se pudo medir).' : 'Valor inválido: usá solo números, con coma o punto decimal, o "NA".';
+    $('pErr').style.display = 'block'; el.focus(); return;
+  }
+  const n = leerNext();
+  if (ptosP.some(r => r.n === n) && !confirm('El punto N° ' + n + ' ya está cargado en este sector. ¿Registrarlo igual?')) return;
+  const lux = q.t === 'na' ? 'NA' : el.value.trim();
+  ptosP.push({ n, hora: horaLocal(), lux });
+  fijarNext(n + 1);
+  el.value = '';
+  renderPuestos();
+  $('pOk').innerHTML = `✓ Punto <b>${n}</b> = ${esc(lux)}${q.t === 'na' ? '' : ' lux'} · anotá <b>${n}</b> en el croquis`;
+  $('pOk').style.display = 'block';
+  guardar();
+  el.focus();   // deja el teclado abierto para el próximo punto
+}
+function borrarUltimo() {
+  if (!ptosP.length) return;
+  const u = ptosP[ptosP.length - 1];
+  if (!confirm('¿Borrar el punto N° ' + u.n + ' (' + u.lux + ')? La numeración vuelve a ' + u.n + '.')) return;
+  ptosP.pop();
+  fijarNext(u.n);
+  $('pOk').style.display = 'none';
+  renderPuestos(); guardar();
 }
 function num(id) { return parseFloat($(id).value.trim().replace(',', '.')); }
 
@@ -340,9 +448,9 @@ function verificarVigencia() {
 
 function guardar() {
   try {
-    const d = { campos: {}, lect: {}, cd: null };
+    const d = { campos: {}, lect: {}, cd: null, ptos: ptosP };
     IDS.forEach(id => d.campos[id] = $(id).value);
-    document.querySelectorAll('.lux-input').forEach(el => d.lect[el.dataset.point] = el.value);
+    document.querySelectorAll('#tbody .lux-input').forEach(el => d.lect[el.dataset.point] = el.value);
     if (estado) { const q = estado.snap.split('|'); d.cd = { L: q[0], A: q[1], H: q[2], modo: q[3], nCols: q[4], nFilas: q[5] }; }
     localStorage.setItem(KEY, JSON.stringify(d));
   } catch (e) {}
@@ -354,11 +462,12 @@ function restaurar() {
     if (!d) return;
     IDS.forEach(id => { if (d.campos[id] !== undefined) $(id).value = d.campos[id]; });
     $('obsPrint').textContent = $('observaciones').value;
+    ptosP = Array.isArray(d.ptos) ? d.ptos : [];
     if (d.cd) {
       $('modo').value = d.cd.modo || 'norma'; $('nCols').value = d.cd.nCols || ''; $('nFilas').value = d.cd.nFilas || '';
       $('L').value = d.cd.L; $('A').value = d.cd.A; $('H').value = d.cd.H || '';
       calcular();
-      document.querySelectorAll('.lux-input').forEach(el => { el.value = d.lect[el.dataset.point] || ''; });
+      document.querySelectorAll('#tbody .lux-input').forEach(el => { el.value = d.lect[el.dataset.point] || ''; });
       ['L','A','H','nCols','nFilas','modo'].forEach(id => { if (d.campos[id] !== undefined) $(id).value = d.campos[id]; });
       aplicarModo();
       actualizarResumenLux();
@@ -369,9 +478,37 @@ function restaurar() {
 
 function leerReg() { try { return JSON.parse(localStorage.getItem(KREG) || '[]'); } catch (e) { return []; } }
 
+function guardarEnRegistro(f) {
+  try {
+    const reg = leerReg();
+    const key = r => [r.establecimiento, r.sector, r.fecha].join('|');
+    const i = reg.findIndex(r => key(r) === key(f));
+    if (i >= 0) reg[i] = f; else reg.push(f);
+    localStorage.setItem(KREG, JSON.stringify(reg));
+  } catch (e) {}
+  actualizarRegistro();
+}
+
+function registrarPuestos() {
+  if (!ptosP.length) return;
+  const vals = ptosP.map(r => leerLux({ value: String(r.lux) })).filter(r => r.t === 'ok').map(r => r.v);
+  const f = {};
+  IDS.forEach(id => f[id] = $(id).value);
+  Object.assign(f, {
+    L: '', A: '', H: '', K: '', N: '', grilla: '', modo: 'Por puestos',
+    puntos: ptosP.length, cargadas: vals.length,
+    prom: '', mn: vals.length ? Math.min(...vals) : '', mx: vals.length ? Math.max(...vals) : '', unif: '-', cumpleUnif: '-',
+    vence: fechaVence(),
+    lect: ptosP.map(r => r.n + '=' + r.lux).join(' '),
+    ptos: ptosP.map(r => ({ ...r }))
+  });
+  guardarEnRegistro(f);
+}
+
 function registrar() {
+  if ($('modo').value === 'puestos') { registrarPuestos(); return; }
   if (!estado) return;
-  const els = [...document.querySelectorAll('.lux-input')];
+  const els = [...document.querySelectorAll('#tbody .lux-input')];
   const rs = els.map(leerLux);
   const vals = rs.filter(r => r.t === 'ok').map(r => r.v);
   if (!vals.length) return;
@@ -387,20 +524,13 @@ function registrar() {
     vence: fechaVence(),
     lect: els.map((el, i) => et[i] + '=' + el.value.trim()).join(' ')
   });
-  try {
-    const reg = leerReg();
-    const key = r => [r.establecimiento, r.sector, r.puesto || '', r.fecha].join('|');
-    const i = reg.findIndex(r => key(r) === key(f));
-    if (i >= 0) reg[i] = f; else reg.push(f);
-    localStorage.setItem(KREG, JSON.stringify(reg));
-  } catch (e) {}
-  actualizarRegistro();
+  guardarEnRegistro(f);
 }
 
 function actualizarRegistro() {
   const reg = leerReg();
   $('regInfo').innerHTML = reg.length
-    ? `<b>${reg.length}</b> sector(es) guardado(s): ${reg.map(r => esc((r.sector || 'sin nombre') + (r.puesto ? ' / ' + r.puesto : ''))).join(', ')}. Se guardan al exportar el PDF o al iniciar un sector nuevo.`
+    ? `<b>${reg.length}</b> sector(es) guardado(s): ${reg.map(r => esc(r.sector || 'sin nombre')).join(', ')}. Se guardan al exportar el PDF o al iniciar un sector nuevo.`
     : 'Ninguno todavía. Cada sector se guarda al exportar el PDF o al iniciar un sector nuevo.';
 }
 
@@ -408,22 +538,44 @@ function descargarCSV() {
   registrar();
   const reg = leerReg();
   if (!reg.length) { alert('No hay sectores guardados todavía.'); return; }
-  const cols = [['Empresa','empresa'],['Establecimiento','establecimiento'],['Sector','sector'],['Sección/puesto','puesto'],['Croquis','croquis'],['Origen/orientación','origen'],
+  const cols = [['Empresa','empresa'],['Establecimiento','establecimiento'],['Sector','sector'],['Croquis','croquis'],['Origen/orientación','origen'],
     ['Fecha','fecha'],['Hora inicio','horaInicio'],['Hora fin','horaFin'],['Válida hasta','vence'],
     ['Condiciones atmosféricas','atm'],['Tipo de iluminación','tipoIlum'],['Tipo de fuente','fuente'],
     ['L (m)','L'],['A (m)','A'],['Hm (m)','H'],['K','K'],['N mínimo','N'],['Grilla (col×filas)','grilla'],['Modo de grilla','modo'],['Puntos','puntos'],['Cargadas','cargadas'],
     ['Emed (lux)','prom'],['Emín (lux)','mn'],['Emáx (lux)','mx'],['Emín/Emed','unif'],['Cumple uniformidad','cumpleUnif'],
     ['Observaciones','observaciones'],['Lecturas','lect']];
-  const q = v => {
-    if (v === null || v === undefined) return '';
-    if (typeof v === 'number') v = (Number.isInteger(v) ? String(v) : v.toFixed(2)).replace('.', ',');
-    return '"' + String(v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
-  };
-  const csv = '\uFEFF' + [cols.map(c => q(c[0])).join(';')].concat(reg.map(r => cols.map(c => q(r[c[1]])).join(';'))).join('\r\n');
+  bajarCSV(cols, reg, 'Relevamiento_iluminacion_');
+}
+
+function csvCelda(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number') v = (Number.isInteger(v) ? String(v) : v.toFixed(2)).replace('.', ',');
+  return '"' + String(v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
+}
+function bajarCSV(cols, filas, prefijo) {
+  const csv = '\uFEFF' + [cols.map(c => csvCelda(c[0])).join(';')].concat(filas.map(r => cols.map(c => csvCelda(r[c[1]])).join(';'))).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  a.download = 'Relevamiento_iluminacion_' + fechaLocalISO() + '.csv';
+  a.download = prefijo + fechaLocalISO() + '.csv';
   document.body.appendChild(a); a.click(); a.remove();
+}
+
+// Una fila por punto, con las columnas de la planilla del protocolo (Res. SRT 84/2012).
+// Puesto, sistema y valor requerido quedan vacíos para completar en oficina con el croquis.
+function descargarCSVPuntos() {
+  registrar();
+  const filas = [];
+  leerReg().filter(r => Array.isArray(r.ptos)).forEach(r => r.ptos.forEach(p => {
+    const v = leerLux({ value: String(p.lux) });
+    filas.push({ n: p.n, hora: p.hora, sector: r.sector, puesto: '', tipoIlum: r.tipoIlum, fuente: r.fuente, sistema: '', unif: '-',
+                 lux: v.t === 'ok' ? v.v : p.lux, req: '', fecha: r.fecha, establecimiento: r.establecimiento, croquis: r.croquis, atm: r.atm });
+  }));
+  if (!filas.length) { alert('No hay puntos medidos por puestos todavía.'); return; }
+  filas.sort((a, b) => a.n - b.n);
+  bajarCSV([['Punto de muestreo','n'],['Hora','hora'],['Sector','sector'],['Sección / Puesto / Puesto tipo','puesto'],
+    ['Tipo de iluminación','tipoIlum'],['Tipo de fuente lumínica','fuente'],['Iluminación general / localizada / mixta','sistema'],
+    ['Uniformidad Emín ≥ Emed/2','unif'],['Valor medido (lux)','lux'],['Valor requerido Anexo IV Dto. 351/79','req'],
+    ['Fecha','fecha'],['Establecimiento','establecimiento'],['Croquis','croquis'],['Condiciones atmosféricas','atm']], filas, 'Protocolo_puntos_');
 }
 
 function borrarRegistro() {
@@ -434,7 +586,7 @@ function borrarRegistro() {
 
 function calcular() {
   const lecturasPrevias = {};
-  document.querySelectorAll('.lux-input').forEach(el => { lecturasPrevias[el.dataset.point] = el.value; });
+  document.querySelectorAll('#tbody .lux-input').forEach(el => { lecturasPrevias[el.dataset.point] = el.value; });
   const L = num('L');
   const A = num('A');
   const modo = $('modo').value;
@@ -495,7 +647,7 @@ function calcular() {
   $('tbody').innerHTML = pts.map((p, k) =>
     `<tr><td><b>${p.etiqueta}</b></td><td>${p.fila}</td><td>${p.col}</td><td>${p.x.toFixed(2)}</td><td>${p.y.toFixed(2)}</td><td><input class="lux-input" type="text" inputmode="decimal" autocomplete="off" data-point="${k + 1}" aria-label="Iluminancia punto ${k + 1}" placeholder="lux" enterkeyhint="next"></td></tr>`
   ).join('');
-  document.querySelectorAll('.lux-input').forEach(el => { el.value = prev[el.dataset.point] || ''; });
+  document.querySelectorAll('#tbody .lux-input').forEach(el => { el.value = prev[el.dataset.point] || ''; });
   actualizarResumenLux();
   estado = { L, A, nL, nA, cw, ch, pts, modo, H: modo === 'norma' ? H : '', snap: snapActual() };
   verificarVigencia();
@@ -574,7 +726,7 @@ function dibujar(L, A, nL, nA, cw, ch, pts) {
 }
 
 function actualizarResumenLux() {
-  const els = [...document.querySelectorAll('.lux-input')];
+  const els = [...document.querySelectorAll('#tbody .lux-input')];
   const total = els.length;
   if (!total) { $('luxSummary').textContent = 'Primero calcule la grilla; luego ingrese las lecturas de iluminancia en lux.'; return; }
   const vals = []; let na = 0, mal = 0;
@@ -609,8 +761,9 @@ function iniciarRegistroHorario() {
 }
 
 function exportarPDF() {
-  if ($('gridCard').classList.contains('hidden')) {
-    alert('Primero complete las dimensiones y calcule la grilla.');
+  const porPuestos = $('modo').value === 'puestos';
+  if (porPuestos ? !ptosP.length : $('gridCard').classList.contains('hidden')) {
+    alert(porPuestos ? 'Todavía no hay puntos registrados en este sector.' : 'Primero complete las dimensiones y calcule la grilla.');
     return;
   }
   const faltan = [];
@@ -629,7 +782,7 @@ function nuevaFicha() {
   if (!confirm('¿Iniciar un sector nuevo? El sector actual queda guardado en el registro del equipo si tiene lecturas.')) return;
   registrar();
   // Se conservan: empresa, establecimiento, croquis y condiciones atmosféricas.
-  ['sector','puesto','origen','L','A','H','nCols','nFilas','observaciones','tipoIlum','fuente'].forEach(id => $(id).value = '');
+  ['sector','origen','L','A','H','nCols','nFilas','observaciones','tipoIlum','fuente'].forEach(id => $(id).value = '');
   syncChips();
   $('fecha').value = fechaLocalISO();
   actualizarVigencia();
@@ -639,6 +792,7 @@ function nuevaFicha() {
   $('tbody').innerHTML = '';
   $('luxSummary').textContent = 'Primero calcule la grilla; luego ingrese las lecturas de iluminancia en lux.';
   $('err').style.display = 'none';
+  ptosP = []; $('pLux').value = ''; $('pOk').style.display = 'none'; $('pErr').style.display = 'none'; renderPuestos();   // la numeración continúa
   estado = null; $('stale').style.display = 'none'; $('obsPrint').textContent = ''; guardar();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
@@ -654,6 +808,10 @@ $('btnPdf').addEventListener('click', exportarPDF);
 $('btnNew').addEventListener('click', nuevaFicha);
 $('btnCsv').addEventListener('click', descargarCSV);
 $('btnClr').addEventListener('click', borrarRegistro);
+$('btnCsvP').addEventListener('click', descargarCSVPuntos);
+$('btnAdd').addEventListener('click', agregarPunto);
+$('btnUndo').addEventListener('click', borrarUltimo);
+$('pLux').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarPunto(); } });
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.type === 'radio' && t.hasAttribute('data-chip')) { $(t.name).value = t.value; guardar(); }
@@ -661,7 +819,10 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.type === 'radio') return;
-  if (t.classList && t.classList.contains('lux-input')) actualizarResumenLux();
+  if (t.id === 'pLux') return;
+  if (t.classList && t.classList.contains('p-lux')) { ptosP[+t.dataset.i].lux = t.value.trim(); resumenPuestos(); guardar(); return; }
+  if (t.id === 'pNext') { const v = parseInt(t.value, 10); if (v >= 1) fijarNext(v); return; }
+  if (t.classList && t.classList.contains('lux-input') && !t.classList.contains('p-lux')) actualizarResumenLux();
   if (t.id === 'modo') aplicarModo();
   if (['L','A','H','nCols','nFilas','modo'].includes(t.id)) verificarVigencia();
   if (t.id === 'observaciones') $('obsPrint').textContent = t.value;
@@ -671,11 +832,13 @@ document.addEventListener('input', e => {
 $('tbody').addEventListener('keydown', e => {
   if (e.key !== 'Enter' || !e.target.classList.contains('lux-input')) return;
   e.preventDefault();
-  const l = [...document.querySelectorAll('.lux-input')], k = l.indexOf(e.target);
+  const l = [...document.querySelectorAll('#tbody .lux-input')], k = l.indexOf(e.target);
   if (l[k + 1]) l[k + 1].focus(); else e.target.blur();
 });
 restaurar();
 aplicarModo();
+$('pNext').value = leerNext();
+renderPuestos();
 syncChips();
 if (!$('fecha').value) $('fecha').value = fechaLocalISO();
 if (!$('horaInicio').value) iniciarRegistroHorario();
