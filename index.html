@@ -80,7 +80,6 @@
   #obsPrint { white-space: pre-wrap; font-size: 9pt; }
 
 
-  .venc { font-size: .8rem; color: #475569; margin-top: 4px; }
 
   /* Medición por puestos */
   .next-box { background: #0b3b6f; color: #fff; border-radius: 12px; padding: 12px; text-align: center; margin-bottom: 12px; }
@@ -124,7 +123,6 @@
     .card#gridCard { break-inside: auto; }
     tr { break-inside: avoid; }
     footer { margin-top: 6mm; }
-    .venc { font-size: 8pt; }
     .card#puestosCard { break-inside: auto; }
   }
 </style>
@@ -151,7 +149,7 @@
     <div class="field"><label for="sector">Sector</label><input type="text" id="sector" placeholder="Ej.: Depósito"></div>
     <div class="field"><label for="croquis">Croquis / plano de referencia</label><input type="text" id="croquis" placeholder="Ej.: Croquis 3 - hoja 1"></div>
     <div class="field"><label for="origen">Origen / orientación del croquis</label><input type="text" id="origen" placeholder="Ej.: A1 junto a la puerta de ingreso"></div>
-    <div class="field"><label for="fecha">Fecha de relevamiento</label><input type="date" id="fecha"><div class="venc" id="venc"></div></div>
+    <div class="field"><label for="fecha">Fecha de relevamiento</label><input type="date" id="fecha"></div>
   </div>
 
   <div class="card" id="geometryCard">
@@ -251,10 +249,9 @@
     <h2>5. Sectores registrados en este equipo</h2>
     <div class="summary-line" id="regInfo"></div>
     <button id="btnCsv" style="margin-top:10px">Exportar CSV del relevamiento</button>
-    <p class="hint">Una fila por punto de muestreo (grilla y puestos), con las columnas de la planilla del protocolo.</p>
     <button id="btnClr" style="margin-top:10px">Borrar registro</button>
   </div>
-  <footer>Registro de cálculo y medición de iluminancia · V6</footer>
+  <footer>Registro de cálculo y medición de iluminancia · V6 · Las lecturas deben efectuarse en el centro de cada área.</footer>
 </div>
 
 <script>
@@ -352,18 +349,6 @@ function borrarUltimo() {
 }
 function num(id) { return parseFloat($(id).value.trim().replace(',', '.')); }
 
-function fechaVence() {
-  const f = $('fecha').value;
-  if (!f) return '';
-  const d = new Date(f + 'T00:00:00');
-  d.setFullYear(d.getFullYear() + 1);
-  return d.toLocaleDateString('es-AR');
-}
-function actualizarVigencia() {
-  const v = fechaVence();
-  $('venc').textContent = v ? 'Validez de la medición: 12 meses (Res. SRT 84/2012, art. 2°), hasta el ' + v : '';
-}
-
 // Elige nL x nA con nL*nA >= N y celdas lo más cuadradas posible
 function elegirGrilla(L, A, N) {
   let best = null;
@@ -450,7 +435,6 @@ function registrarPuestos() {
     L: '', A: '', H: '', K: '', N: '', grilla: '', modo: 'Por puestos',
     puntos: ptosP.length, cargadas: vals.length,
     prom: '', mn: vals.length ? Math.min(...vals) : '', mx: vals.length ? Math.max(...vals) : '', unif: '-', cumpleUnif: '-',
-    vence: fechaVence(),
     lect: ptosP.map(r => r.n + '=' + r.lux).join(' '),
     ptos: ptosP.map(r => ({ ...r }))
   });
@@ -473,7 +457,6 @@ function registrar() {
     K: estado.modo === 'custom' ? '' : $('rK').textContent, N: estado.modo === 'custom' ? '' : $('rN').textContent.replace(' puntos', ''), grilla: $('rGrid').textContent,
     puntos: els.length, cargadas: vals.length, prom, mn, mx, unif: prom > 0 ? mn / prom : null,
     cumpleUnif: prom > 0 ? (mn / prom >= 0.5 ? 'Sí' : 'No') : '',
-    vence: fechaVence(),
     lect: els.map((el, i) => et[i] + '=' + el.value.trim()).join(' '),
     ptos: els.map((el, i) => ({ etq: et[i], lux: el.value.trim(), hora: horasG[el.dataset.point] || '' })).filter(q => q.lux !== '')
   });
@@ -752,7 +735,6 @@ function nuevaFicha() {
   // Se conservan: empresa, establecimiento y croquis.
   ['sector','origen','L','A','H','nCols','nFilas','observaciones'].forEach(id => $(id).value = '');
     $('fecha').value = fechaLocalISO();
-  actualizarVigencia();
   $('resultCard').classList.add('hidden');
   $('gridCard').classList.add('hidden');
   $('tbody').innerHTML = '';
@@ -791,7 +773,6 @@ document.addEventListener('input', e => {
   if (t.id === 'modo') aplicarModo();
   if (['L','A','H','nCols','nFilas','modo'].includes(t.id)) verificarVigencia();
   if (t.id === 'observaciones') $('obsPrint').textContent = t.value;
-  if (t.id === 'fecha') actualizarVigencia();
   guardar();
 });
 $('tbody').addEventListener('keydown', e => {
@@ -805,7 +786,6 @@ aplicarModo();
 $('pNext').value = leerNext();
 renderPuestos();
 if (!$('fecha').value) $('fecha').value = fechaLocalISO();
-actualizarVigencia();
 actualizarRegistro();
 // El teclado del móvil dispara resize: solo se redibuja el esquema, la tabla no se toca.
 window.addEventListener('resize', redibujar);
