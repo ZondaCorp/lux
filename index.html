@@ -79,13 +79,6 @@
   #btnClr { background: #b91c1c; }
   #obsPrint { white-space: pre-wrap; font-size: 9pt; }
 
-  /* Selectores de un toque */
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-  label.chip { display: inline-block; margin: 0; font-weight: 500; position: relative; }
-  .chip input { position: absolute; opacity: 0; pointer-events: none; }
-  .chip span { display: inline-block; padding: 10px 14px; min-height: 44px; line-height: 22px; border: 1px solid #cbd5e1; border-radius: 999px; background: #fff; font-size: .95rem; color: #0f172a; touch-action: manipulation; }
-  .chip input:checked + span { background: #0b3b6f; border-color: #0b3b6f; color: #fff; }
-  .chip input:focus-visible + span { outline: 2px solid #2563eb; }
 
   .venc { font-size: .8rem; color: #475569; margin-top: 4px; }
 
@@ -131,10 +124,6 @@
     .card#gridCard { break-inside: auto; }
     tr { break-inside: avoid; }
     footer { margin-top: 6mm; }
-    /* En el PDF solo se imprime la opción elegida de cada selector */
-    .chip:not(:has(input:checked)) { display: none; }
-    .chip span { border: none; padding: 0; min-height: 0; background: none !important; color: #111827 !important; font-weight: 600; font-size: 9pt; }
-    .chips:not(:has(input:checked))::after { content: '— sin dato —'; font-size: 9pt; color: #6b7280; }
     .venc { font-size: 8pt; }
     .card#puestosCard { break-inside: auto; }
   }
@@ -144,7 +133,7 @@
 <div class="wrap">
   <header>
     <h1>ZONDA CORP SRL</h1>
-    <p>App soporte medición de iluminación</p>
+    <p>Medición de iluminación (Res. SRT 84/2012)</p>
   </header>
 
   <div class="card no-print" id="modoCard" style="padding:10px 14px;margin-bottom:10px">
@@ -163,35 +152,6 @@
     <div class="field"><label for="croquis">Croquis / plano de referencia</label><input type="text" id="croquis" placeholder="Ej.: Croquis 3 - hoja 1"></div>
     <div class="field"><label for="origen">Origen / orientación del croquis</label><input type="text" id="origen" placeholder="Ej.: A1 junto a la puerta de ingreso"></div>
     <div class="field"><label for="fecha">Fecha de relevamiento</label><input type="date" id="fecha"><div class="venc" id="venc"></div></div>
-  </div>
-
-  <div class="card" id="condCard">
-    <h2>Condiciones de iluminación del sector</h2>
-    <div class="field"><label>Condiciones atmosféricas</label>
-      <div class="chips">
-        <label class="chip"><input type="radio" name="atm" value="Despejado" data-chip><span>Despejado</span></label>
-        <label class="chip"><input type="radio" name="atm" value="Parcialmente nublado" data-chip><span>Parcial</span></label>
-        <label class="chip"><input type="radio" name="atm" value="Cubierto" data-chip><span>Cubierto</span></label>
-        <label class="chip"><input type="radio" name="atm" value="Lluvia" data-chip><span>Lluvia</span></label>
-        <label class="chip"><input type="radio" name="atm" value="Nocturno" data-chip><span>Noche</span></label>
-      </div><input type="hidden" id="atm">
-    </div>
-    <div class="field"><label>Tipo de iluminación</label>
-      <div class="chips">
-        <label class="chip"><input type="radio" name="tipoIlum" value="Natural" data-chip><span>Natural</span></label>
-        <label class="chip"><input type="radio" name="tipoIlum" value="Artificial" data-chip><span>Artificial</span></label>
-        <label class="chip"><input type="radio" name="tipoIlum" value="Mixta" data-chip><span>Mixta</span></label>
-      </div><input type="hidden" id="tipoIlum">
-    </div>
-    <div class="field"><label>Tipo de fuente instalada</label>
-      <div class="chips">
-        <label class="chip"><input type="radio" name="fuente" value="Incandescente" data-chip><span>Incandescente</span></label>
-        <label class="chip"><input type="radio" name="fuente" value="Descarga" data-chip><span>Descarga</span></label>
-        <label class="chip"><input type="radio" name="fuente" value="LED" data-chip><span>LED</span></label>
-        <label class="chip"><input type="radio" name="fuente" value="Mixta" data-chip><span>Mixta</span></label>
-      </div><input type="hidden" id="fuente">
-      <p class="hint">Descarga: fluorescentes, sodio, mercurio, halogenuros metálicos.</p>
-    </div>
   </div>
 
   <div class="card" id="geometryCard">
@@ -312,9 +272,7 @@ function numeroColumna(n) {
 }
 
 let estado = null;
-const CHIPS = ['atm','tipoIlum','fuente'];
-const IDS = ['empresa','establecimiento','sector','croquis','origen','fecha','modo','L','A','H','nCols','nFilas','observaciones',
-             'atm','tipoIlum','fuente'];
+const IDS = ['empresa','establecimiento','sector','croquis','origen','fecha','modo','L','A','H','nCols','nFilas','observaciones'];
 const KEY = 'lux_v6_ficha', KREG = 'lux_v6_reg', KNUM = 'lux_v6_num';
 let horasG = {};  // hora de cada lectura de grilla, por punto (se registra sola al cargar el valor)
 let ptosP = [];   // puntos del sector en modo puestos: { n, hora, lux }
@@ -393,13 +351,6 @@ function borrarUltimo() {
   renderPuestos(); guardar();
 }
 function num(id) { return parseFloat($(id).value.trim().replace(',', '.')); }
-
-function syncChips() {
-  CHIPS.forEach(g => {
-    const v = $(g).value;
-    document.querySelectorAll('input[name="' + g + '"]').forEach(r => { r.checked = r.value === v; });
-  });
-}
 
 function fechaVence() {
   const f = $('fecha').value;
@@ -572,11 +523,11 @@ function descargarCSV() {
     const v = leerLux({ value: String(p.lux) });
     const grilla = r.modo !== 'Por puestos';
     filas.push({
-      n: p.n, hora: p.hora || r.horaInicio || '', sector: r.sector, puesto: '', tipoIlum: r.tipoIlum, fuente: r.fuente, sistema: '',
+      n: p.n, hora: p.hora || r.horaInicio || '', sector: r.sector, puesto: '', tipoIlum: '', fuente: '', sistema: '',
       unif: grilla && typeof r.unif === 'number' ? fmt(r.unif) + ' - ' + (r.unif >= 0.5 ? 'Cumple' : 'No cumple') : '-',
       lux: v.t === 'ok' ? v.v : v.t === 'na' ? '-' : p.lux, req: '',
       etq: grilla ? p.etq : '', modo: grilla ? (r.modo === 'Personalizada' ? 'Grilla personalizada' : 'Grilla normativa') : 'Por puestos',
-      fecha: r.fecha, establecimiento: r.establecimiento, croquis: r.croquis, atm: r.atm,
+      fecha: r.fecha, establecimiento: r.establecimiento, croquis: r.croquis,
       emed: grilla ? r.prom : '', emin: grilla ? r.mn : '', emax: grilla ? r.mx : '',
       grillaDim: r.grilla || '', K: r.K ? String(r.K).replace('.', ',') : '', L: r.L, A: r.A, H: r.H, obs: r.observaciones
     });
@@ -586,7 +537,7 @@ function descargarCSV() {
   bajarCSV([['Punto de muestreo','n'],['Hora','hora'],['Sector','sector'],['Sección / Puesto / Puesto tipo','puesto'],
     ['Tipo de iluminación','tipoIlum'],['Tipo de fuente lumínica','fuente'],['Iluminación general / localizada / mixta','sistema'],
     ['Uniformidad Emín ≥ Emed/2','unif'],['Valor medido (lux)','lux'],['Valor requerido Anexo IV Dto. 351/79','req'],
-    ['Punto de grilla','etq'],['Modo','modo'],['Fecha','fecha'],['Establecimiento','establecimiento'],['Croquis','croquis'],['Condiciones atmosféricas','atm'],
+    ['Punto de grilla','etq'],['Modo','modo'],['Fecha','fecha'],['Establecimiento','establecimiento'],['Croquis','croquis'],
     ['Emed sector (lux)','emed'],['Emín sector (lux)','emin'],['Emáx sector (lux)','emax'],['Grilla (col×filas)','grillaDim'],['K','K'],
     ['L (m)','L'],['A (m)','A'],['Hm (m)','H'],['Observaciones','obs']], filas, 'Relevamiento_iluminacion_');
 }
@@ -789,11 +740,6 @@ function exportarPDF() {
     alert(porPuestos ? 'Todavía no hay puntos registrados en este sector.' : 'Primero complete las dimensiones y calcule la grilla.');
     return;
   }
-  const faltan = [];
-  [['atm','condiciones atmosféricas'],['tipoIlum','tipo de iluminación'],['fuente','tipo de fuente']]
-    .forEach(([id, t]) => { if (!$(id).value) faltan.push(t); });
-  if (faltan.length && !confirm('Faltan datos del sector: ' + faltan.join(', ') + '.\n\n¿Exportar igual?')) return;
-
   $('obsPrint').textContent = $('observaciones').value;
   registrar(); guardar();
   document.title = `Ficha_Iluminacion_${($('sector').value || 'Sector').trim().replace(/[^a-z0-9-_]+/gi, '_')}_${$('fecha').value || 'sin_fecha'}`;
@@ -803,10 +749,9 @@ function exportarPDF() {
 function nuevaFicha() {
   if (!confirm('¿Guardar este sector y empezar uno nuevo? El sector actual queda guardado en el registro del equipo si tiene lecturas.')) return;
   registrar();
-  // Se conservan: empresa, establecimiento, croquis y condiciones atmosféricas.
-  ['sector','origen','L','A','H','nCols','nFilas','observaciones','tipoIlum','fuente'].forEach(id => $(id).value = '');
-  syncChips();
-  $('fecha').value = fechaLocalISO();
+  // Se conservan: empresa, establecimiento y croquis.
+  ['sector','origen','L','A','H','nCols','nFilas','observaciones'].forEach(id => $(id).value = '');
+    $('fecha').value = fechaLocalISO();
   actualizarVigencia();
   $('resultCard').classList.add('hidden');
   $('gridCard').classList.add('hidden');
@@ -833,13 +778,8 @@ $('btnAdd').addEventListener('click', agregarPunto);
 $('btnNoMed').addEventListener('click', () => { $('pLux').value = '-'; agregarPunto(); });
 $('btnUndo').addEventListener('click', borrarUltimo);
 $('pLux').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarPunto(); } });
-document.addEventListener('change', e => {
-  const t = e.target;
-  if (t.type === 'radio' && t.hasAttribute('data-chip')) { $(t.name).value = t.value; guardar(); }
-});
 document.addEventListener('input', e => {
   const t = e.target;
-  if (t.type === 'radio') return;
   if (t.id === 'pLux') return;
   if (t.classList && t.classList.contains('p-lux')) { ptosP[+t.dataset.i].lux = t.value.trim(); resumenPuestos(); guardar(); return; }
   if (t.id === 'pNext') { const v = parseInt(t.value, 10); if (v >= 1) fijarNext(v); return; }
@@ -864,7 +804,6 @@ restaurar();
 aplicarModo();
 $('pNext').value = leerNext();
 renderPuestos();
-syncChips();
 if (!$('fecha').value) $('fecha').value = fechaLocalISO();
 actualizarVigencia();
 actualizarRegistro();
