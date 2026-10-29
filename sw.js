@@ -1,6 +1,6 @@
 // Service worker: guarda la app en el equipo para abrirla sin señal.
 // Para publicar una versión nueva, subí los archivos y cambiá este número.
-const CACHE = 'iluminacion-v6-5';
+const CACHE = 'iluminacion-v6-6';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
