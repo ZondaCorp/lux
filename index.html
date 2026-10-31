@@ -136,7 +136,7 @@
 <div class="wrap">
   <header>
     <h1>ZONDA CORP SRL</h1>
-    <p>App soporte de medición de iluminación</p>
+    <p>Medición de iluminación (Res. SRT 84/2012)</p>
   </header>
 
   <div class="pend no-print hidden" id="pendBanner">
@@ -262,7 +262,7 @@
     <button id="btnCsv" style="margin-top:10px">Exportar CSV del relevamiento</button>
     <button id="btnClr" style="margin-top:10px">Borrar registro</button>
   </div>
-  <footer>Registro de cálculo y medición de iluminancia · V7 </footer>
+  <footer>Registro de cálculo y medición de iluminancia · V6 · Las lecturas deben efectuarse en el centro de cada área.</footer>
 </div>
 
 <script>
@@ -451,8 +451,10 @@ function contarPendientes() {
 }
 function actualizarPendientes() {
   const n = contarPendientes();
+  const reg = leerReg(), r = reg[buscarActual(reg)];
+  const actual = hayLecturasActuales() && (!r || r.exp !== true || r.lect !== lectActual());
   $('pendBanner').classList.toggle('hidden', n === 0);
-  $('pendTxt').innerHTML = n ? `⚠ <b>${n} sector${n > 1 ? 'es' : ''} sin exportar</b> en este equipo. Los datos están solo en este celular: exportá el CSV y envialo antes de cerrar la jornada.` : '';
+  $('pendTxt').innerHTML = n ? `⚠ <b>${n} sector${n > 1 ? 'es' : ''} sin exportar</b> en este equipo${actual ? (n > 1 ? ' (incluye el sector en pantalla)' : ' (el sector en pantalla)') : ''}. Los datos están solo en este celular: exportá el CSV y envialo antes de cerrar la jornada.` : '';
 }
 
 function guardar() {
@@ -624,10 +626,12 @@ function bajarCSV(cols, filas, prefijo) {
 }
 
 function borrarRegistro() {
-  const n = leerReg().filter(r => r.exp !== true).length;
-  if (!confirm(n ? `⚠ Hay ${n} sector(es) que todavía NO se exportaron y se van a perder.\n\n¿Borrar igual el registro de este equipo?`
-                 : '¿Borrar el registro de todos los sectores guardados en este equipo? (ya fueron exportados)')) return;
+  const n = contarPendientes(), enCurso = hayLecturasActuales();
+  const extra = enCurso ? '\n\nTambién se descartan las lecturas del sector que está en pantalla.' : '';
+  if (!confirm((n ? `⚠ Hay ${n} sector(es) que todavía NO se exportaron y se van a perder.\n\n¿Borrar igual el registro de este equipo?`
+                  : '¿Borrar el registro de todos los sectores guardados en este equipo? (ya fueron exportados)') + extra)) return;
   try { localStorage.removeItem(KREG); } catch (e) {}
+  limpiarFicha();
   actualizarRegistro();
 }
 
@@ -833,6 +837,12 @@ function exportarPDF() {
 function nuevaFicha() {
   if (!confirm('¿Guardar este sector y empezar uno nuevo? El sector actual queda guardado en el registro del equipo si tiene lecturas.')) return;
   registrar();
+  limpiarFicha();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+// Deja la ficha lista para un sector nuevo (sin guardar nada).
+function limpiarFicha() {
   // Se conservan: empresa, establecimiento y croquis.
   ['sector','origen','L','A','H','nCols','nFilas','observaciones'].forEach(id => $(id).value = '');
     $('fecha').value = fechaLocalISO();
@@ -844,7 +854,6 @@ function nuevaFicha() {
   fichaId = nuevoId(); fichaLegada = false; celdaG = null; actualizarBotonGuion(); avisoNombre();
   ptosP = []; horasG = {}; $('pLux').value = ''; $('pOk').style.display = 'none'; $('pErr').style.display = 'none'; renderPuestos();   // la numeración continúa
   estado = null; $('stale').style.display = 'none'; $('obsPrint').textContent = ''; guardar();
-  window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 function fechaLocalISO() {
