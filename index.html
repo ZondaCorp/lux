@@ -73,6 +73,11 @@
   .lux-input:focus { outline: 2px solid #2563eb; border-color: transparent; }
   .table-wrap { -webkit-overflow-scrolling: touch; }
   .summary-line { background: #f8fafc; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: .88rem; line-height: 1.6; }
+  .pend { background: #fef3c7; border: 1px solid #f59e0b; color: #78350f; border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; font-size: .9rem; line-height: 1.5; }
+  .pend button { margin-top: 8px; padding: 10px; font-size: .95rem; background: #b45309; }
+  .warn-line { color: #92400e; font-size: .82rem; margin-top: 4px; display: none; }
+  #btnGuion { background: #fff; color: #475569; border: 1px solid #cbd5e1; font-size: .92rem; padding: 10px; margin-top: 8px; }
+  #btnGuion:disabled { opacity: .5; }
   .report-only { display: none; }
   .lux-input.bad { border-color: #b91c1c; background: #fef2f2; }
   #btnCsv { background: #0f766e; }
@@ -134,6 +139,11 @@
     <p>Medición de iluminación (Res. SRT 84/2012)</p>
   </header>
 
+  <div class="pend no-print hidden" id="pendBanner">
+    <div id="pendTxt"></div>
+    <button id="btnPendCsv" type="button">Exportar CSV ahora</button>
+  </div>
+
   <div class="card no-print" id="modoCard" style="padding:10px 14px;margin-bottom:10px">
     <div class="field" style="margin:0"><select id="modo" aria-label="Modo de grilla">
       <option value="puestos">Medición por puestos (puntos numerados)</option>
@@ -146,7 +156,7 @@
     <h2>Identificación del relevamiento</h2>
     <div class="field"><label for="empresa">Empresa</label><input type="text" id="empresa"  placeholder="Empresa / cliente"></div>
     <div class="field"><label for="establecimiento">Establecimiento / ubicación</label><input type="text" id="establecimiento" placeholder="Ej.: Planta, edificio, dirección"></div>
-    <div class="field"><label for="sector">Sector</label><input type="text" id="sector" placeholder="Ej.: Depósito"></div>
+    <div class="field"><label for="sector">Sector</label><input type="text" id="sector" placeholder="Ej.: Depósito"><div class="warn-line" id="secWarn"></div></div>
     <div class="field"><label for="croquis">Croquis / plano de referencia</label><input type="text" id="croquis" placeholder="Ej.: Croquis 3 - hoja 1"></div>
     <div class="field"><label for="origen">Origen / orientación del croquis</label><input type="text" id="origen" placeholder="Ej.: A1 junto a la puerta de ingreso"></div>
     <div class="field"><label for="fecha">Fecha de relevamiento</label><input type="date" id="fecha"></div>
@@ -201,6 +211,7 @@
         <tbody id="tbody"></tbody>
       </table>
     </div>
+    <button id="btnGuion" type="button" class="no-print" disabled>Tocá una celda para marcarla como no medida ( - )</button>
     <div class="summary-line" id="luxSummary">Ingrese las lecturas de iluminancia en lux en la tabla. El promedio se calculará con los valores cargados.</div>
   </div>
 
@@ -251,7 +262,7 @@
     <button id="btnCsv" style="margin-top:10px">Exportar CSV del relevamiento</button>
     <button id="btnClr" style="margin-top:10px">Borrar registro</button>
   </div>
-  <footer>Registro de cálculo y medición de iluminancia · V6 </footer>
+  <footer>Registro de cálculo y medición de iluminancia · V6 · Las lecturas deben efectuarse en el centro de cada área.</footer>
 </div>
 
 <script>
@@ -272,6 +283,9 @@ let estado = null;
 const IDS = ['empresa','establecimiento','sector','croquis','origen','fecha','modo','L','A','H','nCols','nFilas','observaciones'];
 const KEY = 'lux_v6_ficha', KREG = 'lux_v6_reg', KNUM = 'lux_v6_num';
 let horasG = {};  // hora de cada lectura de grilla, por punto (se registra sola al cargar el valor)
+let fichaId = nuevoId();   // identifica el sector en curso, para no confundirlo con otro del mismo nombre
+let fichaLegada = false;   // ficha en curso guardada por una versión anterior (sin id)
+let celdaG = null;          // última celda de la grilla seleccionada (botón "-")
 let ptosP = [];   // puntos del sector en modo puestos: { n, hora, lux }
 const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function snapActual() {
@@ -382,20 +396,81 @@ function verificarVigencia() {
   if (vigente) redibujar();
 }
 
+function nuevoId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+const claveSector = r => [r.establecimiento || '', (r.sector || '').trim().toLowerCase(), r.fecha || ''].join('|');
+// Registro del sector en curso: por id; los registros de versiones anteriores (sin id) se reconocen por nombre y fecha.
+function buscarActual(reg) {
+  const actual = { establecimiento: $('establecimiento').value, sector: $('sector').value, fecha: $('fecha').value };
+  let i = reg.findIndex(r => r.fichaId === fichaId);
+  if (i < 0 && fichaLegada) i = reg.findIndex(r => !r.fichaId && claveSector(r) === claveSector(actual));
+  return i;
+}
+// Otro sector ya guardado con el mismo nombre, establecimiento y fecha.
+function choque(nombre, reg) {
+  const k = claveSector({ establecimiento: $('establecimiento').value, sector: nombre, fecha: $('fecha').value });
+  return reg.some(r => claveSector(r) === k && !(r.fichaId ? r.fichaId === fichaId : fichaLegada));
+}
+function nombreLibre(reg) {
+  const base = $('sector').value.trim() || 'Sin nombre';
+  if (!choque($('sector').value, reg) && $('sector').value.trim()) return null;
+  if (!$('sector').value.trim() && !choque('Sin nombre', reg)) return 'Sin nombre';
+  let n = 2; while (choque(base + ' (' + n + ')', reg)) n++;
+  return base + ' (' + n + ')';
+}
+function avisoNombre() {
+  const reg = leerReg(), libre = $('sector').value.trim() && choque($('sector').value, reg) ? nombreLibre(reg) : null;
+  $('secWarn').textContent = libre ? `Ya hay un sector guardado con este nombre en esta fecha. Si no lo cambiás, se guarda como "${libre}".` : '';
+  $('secWarn').style.display = libre ? 'block' : 'none';
+}
+// Evita que un sector nuevo reemplace a otro guardado con el mismo nombre: lo renombra antes de guardar.
+function resolverNombre() {
+  const libre = nombreLibre(leerReg());
+  if (!libre) return;
+  const antes = $('sector').value.trim();
+  $('sector').value = libre;
+  if (antes) alert(`Ya había un sector "${antes}" guardado con la misma fecha. Este se guarda como "${libre}" para no reemplazarlo.`);
+  avisoNombre(); guardar();
+}
+
+// ---------- Datos sin exportar ----------
+function lectActual() {
+  if ($('modo').value === 'puestos') return ptosP.map(r => r.n + '=' + r.lux).join(' ');
+  if (!estado) return '';
+  const et = [...document.querySelectorAll('#tbody tr b')].map(b => b.textContent);
+  return [...document.querySelectorAll('#tbody .lux-input')].map((el, i) => et[i] + '=' + el.value.trim()).join(' ');
+}
+function hayLecturasActuales() {
+  if ($('modo').value === 'puestos') return ptosP.length > 0;
+  return [...document.querySelectorAll('#tbody .lux-input')].some(el => el.value.trim() !== '');
+}
+function contarPendientes() {
+  const reg = leerReg(), i = buscarActual(reg);
+  let n = reg.filter((r, j) => j !== i && r.exp !== true).length;
+  if (hayLecturasActuales()) { const r = reg[i]; if (!r || r.exp !== true || r.lect !== lectActual()) n++; }
+  return n;
+}
+function actualizarPendientes() {
+  const n = contarPendientes();
+  $('pendBanner').classList.toggle('hidden', n === 0);
+  $('pendTxt').innerHTML = n ? `⚠ <b>${n} sector${n > 1 ? 'es' : ''} sin exportar</b> en este equipo. Los datos están solo en este celular: exportá el CSV y envialo antes de cerrar la jornada.` : '';
+}
+
 function guardar() {
   try {
-    const d = { campos: {}, lect: {}, cd: null, ptos: ptosP, horasG };
+    const d = { campos: {}, lect: {}, cd: null, ptos: ptosP, horasG, fichaId };
     IDS.forEach(id => d.campos[id] = $(id).value);
     document.querySelectorAll('#tbody .lux-input').forEach(el => d.lect[el.dataset.point] = el.value);
     if (estado) { const q = estado.snap.split('|'); d.cd = { L: q[0], A: q[1], H: q[2], modo: q[3], nCols: q[4], nFilas: q[5] }; }
     localStorage.setItem(KEY, JSON.stringify(d));
   } catch (e) {}
+  try { actualizarPendientes(); } catch (e) {}
 }
 
 function restaurar() {
   try {
     const d = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (!d) return;
+    if (d.fichaId) fichaId = d.fichaId; else fichaLegada = true;
     IDS.forEach(id => { if (d.campos[id] !== undefined) $(id).value = d.campos[id]; });
     $('obsPrint').textContent = $('observaciones').value;
     ptosP = Array.isArray(d.ptos) ? d.ptos : [];
@@ -418,8 +493,10 @@ function leerReg() { try { return JSON.parse(localStorage.getItem(KREG) || '[]')
 function guardarEnRegistro(f) {
   try {
     const reg = leerReg();
-    const key = r => [r.establecimiento, r.sector, r.fecha].join('|');
-    const i = reg.findIndex(r => key(r) === key(f));
+    const i = buscarActual(reg);
+    f.fichaId = fichaId;
+    const sinExp = r => JSON.stringify({ ...r, exp: undefined, fichaId: undefined });
+    f.exp = i >= 0 && reg[i].exp === true && sinExp(reg[i]) === sinExp(f);   // sigue exportado solo si no cambió nada
     if (i >= 0) reg[i] = f; else reg.push(f);
     localStorage.setItem(KREG, JSON.stringify(reg));
   } catch (e) {}
@@ -428,6 +505,7 @@ function guardarEnRegistro(f) {
 
 function registrarPuestos() {
   if (!ptosP.length) return;
+  resolverNombre();
   const vals = ptosP.map(r => leerLux({ value: String(r.lux) })).filter(r => r.t === 'ok').map(r => r.v);
   const f = {};
   IDS.forEach(id => f[id] = $(id).value);
@@ -448,6 +526,7 @@ function registrar() {
   const rs = els.map(leerLux);
   const vals = rs.filter(r => r.t === 'ok').map(r => r.v);
   if (!vals.length) return;
+  resolverNombre();
   const et = [...document.querySelectorAll('#tbody tr b')].map(b => b.textContent);
   const prom = vals.reduce((a, b) => a + b, 0) / vals.length, mn = Math.min(...vals), mx = Math.max(...vals);
   const f = {};
@@ -461,7 +540,7 @@ function registrar() {
     ptos: els.map((el, i) => ({ etq: et[i], lux: el.value.trim(), hora: horasG[el.dataset.point] || '' })).filter(q => q.lux !== '')
   });
   // Conserva los N° ya asignados a este sector (si se vuelve a guardar), o toma los siguientes del contador global.
-  const prev = leerReg().find(r => [r.establecimiento, r.sector, r.fecha].join('|') === [f.establecimiento, f.sector, f.fecha].join('|'));
+  const regAct = leerReg(), prev = regAct[buscarActual(regAct)];
   const nums = {};
   if (prev && Array.isArray(prev.ptos)) prev.ptos.forEach(q => { if (q.etq && q.n) nums[q.etq] = q.n; });
   f.ptos.forEach(q => { q.n = nums[q.etq] || tomarNumero(); });
@@ -472,7 +551,7 @@ function registrar() {
 function tomarNumero() { const n = leerNext(); fijarNext(n + 1); return n; }
 
 function mostrarNumGrilla() {
-  const r = leerReg().find(r => [r.establecimiento, r.sector, r.fecha].join('|') === [$('establecimiento').value, $('sector').value, $('fecha').value].join('|'));
+  const reg = leerReg(), r = reg[buscarActual(reg)];
   const nums = {};
   if (r && Array.isArray(r.ptos)) r.ptos.forEach(q => { if (q.etq) nums[q.etq] = q.n; });
   document.querySelectorAll('#tbody .g-num').forEach(td => { td.textContent = nums[td.dataset.etq] || '-'; });
@@ -481,8 +560,9 @@ function mostrarNumGrilla() {
 function actualizarRegistro() {
   const reg = leerReg();
   $('regInfo').innerHTML = reg.length
-    ? `<b>${reg.length}</b> sector(es) guardado(s): ${reg.map(r => esc(r.sector || 'sin nombre')).join(', ')}. Se guardan al exportar el PDF o al iniciar un sector nuevo.`
+    ? `<b>${reg.length}</b> sector(es) guardado(s): ${reg.map(r => esc(r.sector || 'sin nombre') + (r.exp === true ? ' ✓' : '')).join(', ')}.${reg.some(r => r.exp === true) ? ' (✓ = ya exportado)' : ''} Se guardan al exportar el PDF o al iniciar un sector nuevo.`
     : 'Ninguno todavía. Cada sector se guarda al exportar el PDF o al iniciar un sector nuevo.';
+  actualizarPendientes();
 }
 
 // Exportación global: una fila por punto de muestreo (grilla y puestos), con las columnas de la planilla
@@ -523,6 +603,11 @@ function descargarCSV() {
     ['Punto de grilla','etq'],['Modo','modo'],['Fecha','fecha'],['Establecimiento','establecimiento'],['Croquis','croquis'],
     ['Emed sector (lux)','emed'],['Emín sector (lux)','emin'],['Emáx sector (lux)','emax'],['Grilla (col×filas)','grillaDim'],['K','K'],
     ['L (m)','L'],['A (m)','A'],['Hm (m)','H'],['Observaciones','obs']], filas, 'Relevamiento_iluminacion_');
+  try {
+    const r2 = leerReg(); r2.forEach(r => { r.exp = true; });
+    localStorage.setItem(KREG, JSON.stringify(r2));
+  } catch (e) {}
+  actualizarRegistro();
 }
 
 function csvCelda(v) {
@@ -539,7 +624,9 @@ function bajarCSV(cols, filas, prefijo) {
 }
 
 function borrarRegistro() {
-  if (!confirm('¿Borrar el registro de todos los sectores guardados en este equipo? Descargá el CSV antes si lo necesitás.')) return;
+  const n = leerReg().filter(r => r.exp !== true).length;
+  if (!confirm(n ? `⚠ Hay ${n} sector(es) que todavía NO se exportaron y se van a perder.\n\n¿Borrar igual el registro de este equipo?`
+                 : '¿Borrar el registro de todos los sectores guardados en este equipo? (ya fueron exportados)')) return;
   try { localStorage.removeItem(KREG); } catch (e) {}
   actualizarRegistro();
 }
@@ -712,6 +799,20 @@ function actualizarResumenLux() {
   redibujar();
 }
 
+function actualizarBotonGuion() {
+  const ok = celdaG && document.body.contains(celdaG);
+  $('btnGuion').disabled = !ok;
+  $('btnGuion').textContent = ok ? `Marcar ${celdaG.closest('tr').querySelector('b').textContent} como no medido ( - )` : 'Tocá una celda para marcarla como no medida ( - )';
+}
+function marcarGuion() {
+  if (!celdaG || !document.body.contains(celdaG)) return;
+  celdaG.value = '-';
+  celdaG.dispatchEvent(new Event('input', { bubbles: true }));
+  const l = [...document.querySelectorAll('#tbody .lux-input')], sig = l[l.indexOf(celdaG) + 1];
+  if (sig) { sig.focus(); celdaG = sig; } else celdaG.blur();
+  actualizarBotonGuion();
+}
+
 function horaLocal() {
   const ahora = new Date();
   return ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -740,6 +841,7 @@ function nuevaFicha() {
   $('tbody').innerHTML = '';
   $('luxSummary').textContent = 'Primero calcule la grilla; luego ingrese las lecturas de iluminancia en lux.';
   $('err').style.display = 'none';
+  fichaId = nuevoId(); fichaLegada = false; celdaG = null; actualizarBotonGuion(); avisoNombre();
   ptosP = []; horasG = {}; $('pLux').value = ''; $('pOk').style.display = 'none'; $('pErr').style.display = 'none'; renderPuestos();   // la numeración continúa
   estado = null; $('stale').style.display = 'none'; $('obsPrint').textContent = ''; guardar();
   window.scrollTo({top: 0, behavior: 'smooth'});
@@ -757,6 +859,13 @@ $('btnNew').addEventListener('click', nuevaFicha);
 $('btnCsv').addEventListener('click', descargarCSV);
 $('btnClr').addEventListener('click', borrarRegistro);
 $('btnAdd').addEventListener('click', agregarPunto);
+$('btnPendCsv').addEventListener('click', descargarCSV);
+$('tbody').addEventListener('focusin', e => { if (e.target.classList.contains('lux-input')) { celdaG = e.target; actualizarBotonGuion(); } });
+// pointerdown con preventDefault: el botón no le quita el foco a la celda, así el teclado no se cierra
+$('btnGuion').addEventListener('pointerdown', e => e.preventDefault());
+$('btnGuion').addEventListener('mousedown', e => e.preventDefault());
+$('btnGuion').addEventListener('click', marcarGuion);
+window.addEventListener('beforeunload', e => { if (contarPendientes() > 0) { e.preventDefault(); e.returnValue = ''; } });
 $('btnNoMed').addEventListener('click', () => { $('pLux').value = '-'; agregarPunto(); });
 $('btnUndo').addEventListener('click', borrarUltimo);
 $('pLux').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarPunto(); } });
@@ -773,6 +882,7 @@ document.addEventListener('input', e => {
   if (t.id === 'modo') aplicarModo();
   if (['L','A','H','nCols','nFilas','modo'].includes(t.id)) verificarVigencia();
   if (t.id === 'observaciones') $('obsPrint').textContent = t.value;
+  if (['sector','establecimiento','fecha'].includes(t.id)) avisoNombre();
   guardar();
 });
 $('tbody').addEventListener('keydown', e => {
@@ -787,6 +897,7 @@ $('pNext').value = leerNext();
 renderPuestos();
 if (!$('fecha').value) $('fecha').value = fechaLocalISO();
 actualizarRegistro();
+avisoNombre();
 // El teclado del móvil dispara resize: solo se redibuja el esquema, la tabla no se toca.
 window.addEventListener('resize', redibujar);
 </script>
